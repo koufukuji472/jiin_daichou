@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.19';
+const APP_VERSION = '0.20';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -196,7 +196,7 @@ function drawVerticalChars(ctx,text,x,startY,fontPx,stepPx,weight=600){
   chars.forEach((ch,i)=>ctx.fillText(ch,x,startY+i*stepPx));
 }
 function defaultOfferingAdjust(){
-  return {mainScale:1,mainGapScale:1,mainOffsetMm:0,sideScale:1,sideOffsetMm:0,headingScale:1};
+  return {mainScale:1,mainGapScale:1.4,mainOffsetMm:0,sideScale:1,sideOffsetMm:12,headingScale:1};
 }
 function clamp(n,min,max){return Math.max(min,Math.min(max,n))}
 function fitVerticalText(text,opts){
@@ -224,11 +224,11 @@ function offeringCanvas(r,adjust=defaultOfferingAdjust()){
   const {temple,role,name}=offeringLabelData(r);
   if(role==='住職'){
     // 主文字安全領域を固定し、文字数に応じて最大限の大きさへ自動フィット。
-    const lay=fitVerticalText(temple,{topMm:92,bottomMm:352,maxFontMm:63,gapRatio:.22,scale:clamp(adjust.mainScale||1,.65,1.35),gapScale:clamp(adjust.mainGapScale||1,.45,1.8),offsetMm:clamp(adjust.mainOffsetMm||0,-30,30)});
+    const lay=fitVerticalText(temple,{topMm:92,bottomMm:373,maxFontMm:63,gapRatio:.22,scale:clamp(adjust.mainScale||1,.65,1.35),gapScale:clamp(adjust.mainGapScale||1,.45,1.8),offsetMm:clamp(adjust.mainOffsetMm||0,-30,30)});
     drawVerticalChars(ctx,temple,W/2,lay.startMm*MM,lay.fontMm*MM,lay.stepMm*MM,600);
     c._offeringLayout={main:lay,side:null};
   }else{
-    const lay=fitVerticalText(name,{topMm:90,bottomMm:354,maxFontMm:52.92,gapRatio:.22,scale:clamp(adjust.mainScale||1,.65,1.35),gapScale:clamp(adjust.mainGapScale||1,.45,1.8),offsetMm:clamp(adjust.mainOffsetMm||0,-30,30)});
+    const lay=fitVerticalText(name,{topMm:90,bottomMm:375,maxFontMm:52.92,gapRatio:.22,scale:clamp(adjust.mainScale||1,.65,1.35),gapScale:clamp(adjust.mainGapScale||1,.45,1.8),offsetMm:clamp(adjust.mainOffsetMm||0,-30,30)});
     drawVerticalChars(ctx,name,W/2,lay.startMm*MM,lay.fontMm*MM,lay.stepMm*MM,600);
     const side=[temple,role].filter(Boolean).join('');
     const sn=[...side.replace(/[\s　]/g,'')].length||1;
@@ -236,15 +236,15 @@ function offeringCanvas(r,adjust=defaultOfferingAdjust()){
     const sideBaseStep=sn<=6?27:sn<=8?23:20;
     const sideScale=clamp(adjust.sideScale||1,.7,1.45);
     const sideOffset=clamp(adjust.sideOffsetMm||0,-35,35);
-    drawVerticalChars(ctx,side,121*MM,(81+sideOffset)*MM,sideBaseFont*sideScale*MM,sideBaseStep*sideScale*MM,500);
-    c._offeringLayout={main:lay,side:{fontMm:sideBaseFont*sideScale,startMm:81+sideOffset}};
+    drawVerticalChars(ctx,side,120*MM,(81+sideOffset)*MM,sideBaseFont*sideScale*MM,sideBaseStep*sideScale*MM,500);
+    c._offeringLayout={main:lay,side:{fontMm:sideBaseFont*sideScale,startMm:81+sideOffset,xMm:120}};
   }
   return c;
 }
 function offeringPreviewModal(r){
   const data=offeringLabelData(r);if(!data.name){toast('氏名を入力してください');return null}if(data.role==='住職'&&!data.temple){toast('住職の御供札には寺号が必要です');return null}
   let adjust=defaultOfferingAdjust();
-  const back=document.createElement('div');back.className='modal-backdrop';back.innerHTML=`<div class="modal offering-modal"><h3>御供札プレビュー</h3><div class="offering-preview-wrap" id="offeringPreviewWrap"></div><div class="muted" style="margin:8px 0 12px">148.5 × 420mm / 安全領域内で文字数に応じて自動フィット / 敬称なし</div><div class="grid3 offering-actions"><button class="btn" id="offeringCancel">戻る</button><button class="btn" id="offeringEdit">編集</button><button class="btn primary" id="offeringPdf">PDFを開く</button></div><div class="offering-editor hidden" id="offeringEditor"><div class="section-title">微調整</div><div class="offering-control"><span>主文字サイズ</span><div><button class="btn small" data-adj="mainScale" data-delta="-0.05">−</button><strong id="mainScaleLabel">100%</strong><button class="btn small" data-adj="mainScale" data-delta="0.05">＋</button></div></div><div class="offering-control"><span>主文字の字間</span><div><button class="btn small" data-adj="mainGapScale" data-delta="-0.10">狭く</button><strong id="mainGapScaleLabel">100%</strong><button class="btn small" data-adj="mainGapScale" data-delta="0.10">広く</button></div></div><div class="offering-control"><span>主文字の上下位置</span><div><button class="btn small" data-adj="mainOffsetMm" data-delta="-3">↑</button><strong id="mainOffsetMmLabel">0mm</strong><button class="btn small" data-adj="mainOffsetMm" data-delta="3">↓</button></div></div>${data.role==='住職'?'':`<div class="offering-control"><span>寺号＋役職サイズ</span><div><button class="btn small" data-adj="sideScale" data-delta="-0.05">−</button><strong id="sideScaleLabel">100%</strong><button class="btn small" data-adj="sideScale" data-delta="0.05">＋</button></div></div><div class="offering-control"><span>寺号＋役職の上下位置</span><div><button class="btn small" data-adj="sideOffsetMm" data-delta="-3">↑</button><strong id="sideOffsetMmLabel">0mm</strong><button class="btn small" data-adj="sideOffsetMm" data-delta="3">↓</button></div></div>`}<div class="offering-control"><span>「御供」サイズ</span><div><button class="btn small" data-adj="headingScale" data-delta="-0.05">−</button><strong id="headingScaleLabel">100%</strong><button class="btn small" data-adj="headingScale" data-delta="0.05">＋</button></div></div><button class="btn wide" id="offeringReset" style="margin-top:12px">自動配置に戻す</button></div></div>`;
+  const back=document.createElement('div');back.className='modal-backdrop';back.innerHTML=`<div class="modal offering-modal"><h3>御供札プレビュー</h3><div class="offering-preview-wrap" id="offeringPreviewWrap"></div><div class="muted" style="margin:8px 0 12px">148.5 × 420mm / 下方向へ拡張した安全領域内で文字数に応じて自動フィット / 敬称なし</div><div class="grid3 offering-actions"><button class="btn" id="offeringCancel">戻る</button><button class="btn" id="offeringEdit">編集</button><button class="btn primary" id="offeringPdf">PDFを開く</button></div><div class="offering-editor hidden" id="offeringEditor"><div class="section-title">微調整</div><div class="offering-control"><span>主文字サイズ</span><div><button class="btn small" data-adj="mainScale" data-delta="-0.05">−</button><strong id="mainScaleLabel">100%</strong><button class="btn small" data-adj="mainScale" data-delta="0.05">＋</button></div></div><div class="offering-control"><span>主文字の字間</span><div><button class="btn small" data-adj="mainGapScale" data-delta="-0.10">狭く</button><strong id="mainGapScaleLabel">100%</strong><button class="btn small" data-adj="mainGapScale" data-delta="0.10">広く</button></div></div><div class="offering-control"><span>主文字の上下位置</span><div><button class="btn small" data-adj="mainOffsetMm" data-delta="-3">↑</button><strong id="mainOffsetMmLabel">0mm</strong><button class="btn small" data-adj="mainOffsetMm" data-delta="3">↓</button></div></div>${data.role==='住職'?'':`<div class="offering-control"><span>寺号＋役職サイズ</span><div><button class="btn small" data-adj="sideScale" data-delta="-0.05">−</button><strong id="sideScaleLabel">100%</strong><button class="btn small" data-adj="sideScale" data-delta="0.05">＋</button></div></div><div class="offering-control"><span>寺号＋役職の上下位置</span><div><button class="btn small" data-adj="sideOffsetMm" data-delta="-3">↑</button><strong id="sideOffsetMmLabel">0mm</strong><button class="btn small" data-adj="sideOffsetMm" data-delta="3">↓</button></div></div>`}<div class="offering-control"><span>「御供」サイズ</span><div><button class="btn small" data-adj="headingScale" data-delta="-0.05">−</button><strong id="headingScaleLabel">100%</strong><button class="btn small" data-adj="headingScale" data-delta="0.05">＋</button></div></div><button class="btn wide" id="offeringReset" style="margin-top:12px">自動配置に戻す</button></div></div>`;
   document.body.append(back);
   let canvas=null;
   const labels=()=>{

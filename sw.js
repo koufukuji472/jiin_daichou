@@ -1,4 +1,4 @@
-const VERSION = '0.19';
+const VERSION = '0.20';
 const CACHE = 'temple-reception-v019';
 const LOCAL = [
   './',
