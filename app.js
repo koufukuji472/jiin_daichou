@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.15';
+const APP_VERSION = '0.16';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -198,16 +198,30 @@ function drawVerticalChars(ctx,text,x,startY,fontPx,stepPx,weight=600){
 function offeringCanvas(r){
   const MM=8, W=Math.round(148.5*MM), H=Math.round(420*MM);const c=document.createElement('canvas');c.width=W;c.height=H;const ctx=c.getContext('2d');
   ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.fillStyle='#000';
-  drawSpacedHorizontal(ctx,'御供',W/2,30*MM,42/72*25.4*MM,8*MM);
+  // 掲示札として遠目でも読めるよう、見出しと主文字を大きく配置する。
+  drawSpacedHorizontal(ctx,'御供',W/2,34*MM,22*MM,10*MM);
   const {temple,role,name}=offeringLabelData(r);
   if(role==='住職'){
-    const n=Math.max(1,[...temple.replace(/[\s　]/g,'')].length);const fontMm=n<=3?39:n===4?34:n===5?30:26;const stepMm=n<=3?55:n===4?47:n===5?40:34;const span=(n-1)*stepMm;const start=Math.max(95,195-span/2);
+    // 住職は寺号そのものを主役にして中央へ。3文字寺号を基準に大きく見せる。
+    const n=Math.max(1,[...temple.replace(/[\s　]/g,'')].length);
+    const fontMm=n<=3?50:n===4?43:n===5?37:32;
+    const stepMm=n<=3?75:n===4?62:n===5?52:44;
+    const span=(n-1)*stepMm;
+    const start=Math.max(112,215-span/2);
     drawVerticalChars(ctx,temple,W/2,start*MM,fontMm*MM,stepMm*MM,600);
   }else{
-    const nm=[...name.replace(/[\s　]/g,'')].length||1;const fontMm=nm<=4?33:nm===5?29:nm===6?26:23;const stepMm=nm<=4?48:nm===5?42:nm===6?37:33;const span=(nm-1)*stepMm;const start=Math.max(88,190-span/2);
-    drawVerticalChars(ctx,name,62*MM,start*MM,fontMm*MM,stepMm*MM,600);
-    const side=[temple,role].filter(Boolean).join('');const sn=[...side].length||1;const sideStep=sn<=6?24:sn<=8?20:17;const sideFont=sn<=6?14:sn<=8?12:10.5;
-    drawVerticalChars(ctx,side,112*MM,92*MM,sideFont*MM,sideStep*MM,500);
+    // 住職以外は氏名を札の中心に置き、寺号＋役職は右余白の補助情報にする。
+    const nm=[...name.replace(/[\s　]/g,'')].length||1;
+    const fontMm=nm<=4?42:nm===5?36:nm===6?31:27;
+    const stepMm=nm<=4?60:nm===5?51:nm===6?44:38;
+    const span=(nm-1)*stepMm;
+    const start=Math.max(105,215-span/2);
+    drawVerticalChars(ctx,name,W/2,start*MM,fontMm*MM,stepMm*MM,600);
+    const side=[temple,role].filter(Boolean).join('');
+    const sn=[...side].length||1;
+    const sideStep=sn<=6?27:sn<=8?23:20;
+    const sideFont=sn<=6?18:sn<=8?15.5:13.5;
+    drawVerticalChars(ctx,side,121*MM,108*MM,sideFont*MM,sideStep*MM,500);
   }
   return c;
 }
