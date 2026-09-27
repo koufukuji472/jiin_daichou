@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.16';
+const APP_VERSION = '0.17';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -199,12 +199,12 @@ function offeringCanvas(r){
   const MM=8, W=Math.round(148.5*MM), H=Math.round(420*MM);const c=document.createElement('canvas');c.width=W;c.height=H;const ctx=c.getContext('2d');
   ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.fillStyle='#000';
   // 掲示札として遠目でも読めるよう、見出しと主文字を大きく配置する。
-  drawSpacedHorizontal(ctx,'御供',W/2,34*MM,22*MM,10*MM);
+  drawSpacedHorizontal(ctx,'御供',W/2,34*MM,26.4*MM,10*MM);
   const {temple,role,name}=offeringLabelData(r);
   if(role==='住職'){
     // 住職は寺号そのものを主役にして中央へ。3文字寺号を基準に大きく見せる。
     const n=Math.max(1,[...temple.replace(/[\s　]/g,'')].length);
-    const fontMm=n<=3?50:n===4?43:n===5?37:32;
+    const fontMm=n<=3?60:n===4?51.6:n===5?44.4:38.4;
     const stepMm=n<=3?75:n===4?62:n===5?52:44;
     const span=(n-1)*stepMm;
     const start=Math.max(112,215-span/2);
@@ -212,7 +212,7 @@ function offeringCanvas(r){
   }else{
     // 住職以外は氏名を札の中心に置き、寺号＋役職は右余白の補助情報にする。
     const nm=[...name.replace(/[\s　]/g,'')].length||1;
-    const fontMm=nm<=4?42:nm===5?36:nm===6?31:27;
+    const fontMm=nm<=4?50.4:nm===5?43.2:nm===6?37.2:32.4;
     const stepMm=nm<=4?60:nm===5?51:nm===6?44:38;
     const span=(nm-1)*stepMm;
     const start=Math.max(105,215-span/2);
