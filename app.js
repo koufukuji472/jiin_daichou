@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.4';
+const APP_VERSION = '0.5';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -76,7 +76,7 @@ ${people.length?`<div class="section-title">名簿登録人物</div><div class="
 <div class="section-title">⑤ 配役</div>${roleSelect(r)}<input id="assignmentManual" class="field ${r.assignment&&![].concat(...Object.values(window.FUNERAL_ROLE_GROUPS||{})).includes(r.assignment)?'':'hidden'}" style="margin-top:8px" placeholder="例：尊宿兼先導師" value="${esc(r.assignment)}">
 <div class="section-title">備考</div><textarea id="noteField" class="field" rows="2">${esc(r.note)}</textarea></div>
 ${moneyPanel(r)}
-<div class="card"><div class="grid2">${r.kind==='本人'&&!state.editId?'<button class="btn" id="addDeposit">＋ 預かりを追加</button>':''}<button class="btn primary" id="commitRecord">${state.editId?'更新':'登録'}</button></div>${state.editId?'<button class="btn danger wide" id="deleteRecord" style="margin-top:10px">削除</button>':''}</div>`}
+<div class="card"><div class="grid2">${r.kind==='本人'?'<button class="btn" id="addDeposit">＋ 預かりを追加</button>':''}<button class="btn primary" id="commitRecord">${state.editId?'更新':'登録'}</button></div>${state.editId?'<button class="btn danger wide" id="deleteRecord" style="margin-top:10px">削除</button>':''}</div>`}
 
 function moneyPanel(r){const isI=state.mode==='income';const groups=isI?[['密葬',['密葬香資','密葬供花','密葬供物']],['本葬',['本葬香資','本葬供花料','本葬供物料']],['その他',['問候','献香']]]:[['密葬',['密葬謝誼']],['中陰',['密葬回心','中陰謝誼']],['本葬前',['本葬謝誼']],['本葬',['本葬回心']],['その他',['路資','菓誼','内謝']]];
 return `<div class="card ${isI?'income-panel':'expense-panel'}"><h3 style="color:${isI?'var(--income)':'var(--expense)'}">${isI?'収入':'支出'}入力</h3>${groups.map(([g,items])=>`<div class="section-title">${g}</div>${items.map(item=>moneyRow(r,item)).join('')}`).join('')}<div class="sticky-summary"><span>${isI?'収入':'支出'}小計</span><span class="amount">${fmt(sum(isI?INCOME:EXPENSE,r))} 円</span></div></div>`}
