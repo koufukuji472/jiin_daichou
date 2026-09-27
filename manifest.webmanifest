@@ -1,9 +1,0 @@
-{
-  "name": "本葬受付台帳",
-  "short_name": "受付台帳",
-  "start_url": "./",
-  "display": "standalone",
-  "background_color": "#f3f5f7",
-  "theme_color": "#263b50",
-  "lang": "ja"
-}
