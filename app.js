@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.18';
+const APP_VERSION = '0.19';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -195,43 +195,71 @@ function drawVerticalChars(ctx,text,x,startY,fontPx,stepPx,weight=600){
   const chars=[...String(text||'').replace(/[\s　]/g,'')];ctx.font=`${weight} ${fontPx}px \"Hiragino Mincho ProN\",\"Yu Mincho\",\"YuMincho\",serif`;ctx.textAlign='center';ctx.textBaseline='middle';
   chars.forEach((ch,i)=>ctx.fillText(ch,x,startY+i*stepPx));
 }
-function offeringCanvas(r){
+function defaultOfferingAdjust(){
+  return {mainScale:1,mainGapScale:1,mainOffsetMm:0,sideScale:1,sideOffsetMm:0,headingScale:1};
+}
+function clamp(n,min,max){return Math.max(min,Math.min(max,n))}
+function fitVerticalText(text,opts){
+  const chars=[...String(text||'').replace(/[\s　]/g,'')];
+  const n=Math.max(1,chars.length);
+  const maxFont=opts.maxFontMm*(opts.scale||1);
+  const gapRatio=Math.max(0.03,opts.gapRatio*(opts.gapScale||1));
+  const available=Math.max(1,opts.bottomMm-opts.topMm);
+  // total height = n*font + (n-1)*(font*gapRatio)
+  const fitFont=available/(n+(n-1)*gapRatio);
+  const fontMm=Math.min(maxFont,fitFont);
+  const gapMm=fontMm*gapRatio;
+  const stepMm=fontMm+gapMm;
+  const totalMm=n*fontMm+(n-1)*gapMm;
+  const centerMm=(opts.topMm+opts.bottomMm)/2+(opts.offsetMm||0);
+  const startMm=centerMm-totalMm/2+fontMm/2;
+  return {fontMm,gapMm,stepMm,totalMm,startMm,n,wasFitted:fitFont<maxFont};
+}
+function offeringCanvas(r,adjust=defaultOfferingAdjust()){
   const MM=8, W=Math.round(148.5*MM), H=Math.round(420*MM);const c=document.createElement('canvas');c.width=W;c.height=H;const ctx=c.getContext('2d');
   ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.fillStyle='#000';
-  // 掲示札として遠目でも読めるよう、見出しと主文字を大きく配置する。
-  drawSpacedHorizontal(ctx,'御供',W/2,34*MM,26.4*MM,20*MM);
+  // 見出しは最大サイズを基準にし、ユーザー調整は安全な範囲に制限する。
+  const headingScale=clamp(adjust.headingScale||1,.7,1.45);
+  drawSpacedHorizontal(ctx,'御供',W/2,34*MM,26.4*headingScale*MM,20*headingScale*MM);
   const {temple,role,name}=offeringLabelData(r);
   if(role==='住職'){
-    // 住職は寺号そのものを主役にして中央へ。3文字寺号を基準に大きく見せる。
-    const n=Math.max(1,[...temple.replace(/[\s　]/g,'')].length);
-    const fontMm=n<=3?63:n===4?54.18:n===5?46.62:40.32;
-    const baseFont=n<=3?60:n===4?51.6:n===5?44.4:38.4;
-    const baseStep=n<=3?75:n===4?62:n===5?52:44;
-    const stepMm=fontMm + 2*(baseStep-baseFont);
-    const span=(n-1)*stepMm;
-    const start=Math.max(112,215-span/2);
-    drawVerticalChars(ctx,temple,W/2,start*MM,fontMm*MM,stepMm*MM,600);
+    // 主文字安全領域を固定し、文字数に応じて最大限の大きさへ自動フィット。
+    const lay=fitVerticalText(temple,{topMm:92,bottomMm:352,maxFontMm:63,gapRatio:.22,scale:clamp(adjust.mainScale||1,.65,1.35),gapScale:clamp(adjust.mainGapScale||1,.45,1.8),offsetMm:clamp(adjust.mainOffsetMm||0,-30,30)});
+    drawVerticalChars(ctx,temple,W/2,lay.startMm*MM,lay.fontMm*MM,lay.stepMm*MM,600);
+    c._offeringLayout={main:lay,side:null};
   }else{
-    // 住職以外は氏名を札の中心に置き、寺号＋役職は右余白の補助情報にする。
-    const nm=[...name.replace(/[\s　]/g,'')].length||1;
-    const fontMm=nm<=4?52.92:nm===5?45.36:nm===6?39.06:34.02;
-    const baseFont=nm<=4?50.4:nm===5?43.2:nm===6?37.2:32.4;
-    const baseStep=nm<=4?60:nm===5?51:nm===6?44:38;
-    const stepMm=fontMm + 2*(baseStep-baseFont);
-    const span=(nm-1)*stepMm;
-    const start=Math.max(105,215-span/2);
-    drawVerticalChars(ctx,name,W/2,start*MM,fontMm*MM,stepMm*MM,600);
+    const lay=fitVerticalText(name,{topMm:90,bottomMm:354,maxFontMm:52.92,gapRatio:.22,scale:clamp(adjust.mainScale||1,.65,1.35),gapScale:clamp(adjust.mainGapScale||1,.45,1.8),offsetMm:clamp(adjust.mainOffsetMm||0,-30,30)});
+    drawVerticalChars(ctx,name,W/2,lay.startMm*MM,lay.fontMm*MM,lay.stepMm*MM,600);
     const side=[temple,role].filter(Boolean).join('');
-    const sn=[...side].length||1;
-    const sideStep=sn<=6?27:sn<=8?23:20;
-    const sideFont=sn<=6?19.8:sn<=8?17.05:14.85;
-    drawVerticalChars(ctx,side,121*MM,(108-sideStep)*MM,sideFont*MM,sideStep*MM,500);
+    const sn=[...side.replace(/[\s　]/g,'')].length||1;
+    const sideBaseFont=sn<=6?19.8:sn<=8?17.05:14.85;
+    const sideBaseStep=sn<=6?27:sn<=8?23:20;
+    const sideScale=clamp(adjust.sideScale||1,.7,1.45);
+    const sideOffset=clamp(adjust.sideOffsetMm||0,-35,35);
+    drawVerticalChars(ctx,side,121*MM,(81+sideOffset)*MM,sideBaseFont*sideScale*MM,sideBaseStep*sideScale*MM,500);
+    c._offeringLayout={main:lay,side:{fontMm:sideBaseFont*sideScale,startMm:81+sideOffset}};
   }
   return c;
 }
 function offeringPreviewModal(r){
   const data=offeringLabelData(r);if(!data.name){toast('氏名を入力してください');return null}if(data.role==='住職'&&!data.temple){toast('住職の御供札には寺号が必要です');return null}
-  const c=offeringCanvas(r);const back=document.createElement('div');back.className='modal-backdrop';back.innerHTML=`<div class=\"modal offering-modal\"><h3>御供札プレビュー</h3><div class=\"offering-preview-wrap\"></div><div class=\"muted\" style=\"margin:8px 0 12px\">148.5 × 420mm / 敬称なし / 見出し「御供」</div><div class=\"grid2\"><button class=\"btn\" id=\"offeringCancel\">戻る</button><button class=\"btn primary\" id=\"offeringPdf\">PDFを開く</button></div></div>`;document.body.append(back);$('.offering-preview-wrap',back).append(c);$('#offeringCancel',back).onclick=()=>back.remove();$('#offeringPdf',back).onclick=()=>{makeOfferingPdf(r,c);back.remove()};return back;
+  let adjust=defaultOfferingAdjust();
+  const back=document.createElement('div');back.className='modal-backdrop';back.innerHTML=`<div class="modal offering-modal"><h3>御供札プレビュー</h3><div class="offering-preview-wrap" id="offeringPreviewWrap"></div><div class="muted" style="margin:8px 0 12px">148.5 × 420mm / 安全領域内で文字数に応じて自動フィット / 敬称なし</div><div class="grid3 offering-actions"><button class="btn" id="offeringCancel">戻る</button><button class="btn" id="offeringEdit">編集</button><button class="btn primary" id="offeringPdf">PDFを開く</button></div><div class="offering-editor hidden" id="offeringEditor"><div class="section-title">微調整</div><div class="offering-control"><span>主文字サイズ</span><div><button class="btn small" data-adj="mainScale" data-delta="-0.05">−</button><strong id="mainScaleLabel">100%</strong><button class="btn small" data-adj="mainScale" data-delta="0.05">＋</button></div></div><div class="offering-control"><span>主文字の字間</span><div><button class="btn small" data-adj="mainGapScale" data-delta="-0.10">狭く</button><strong id="mainGapScaleLabel">100%</strong><button class="btn small" data-adj="mainGapScale" data-delta="0.10">広く</button></div></div><div class="offering-control"><span>主文字の上下位置</span><div><button class="btn small" data-adj="mainOffsetMm" data-delta="-3">↑</button><strong id="mainOffsetMmLabel">0mm</strong><button class="btn small" data-adj="mainOffsetMm" data-delta="3">↓</button></div></div>${data.role==='住職'?'':`<div class="offering-control"><span>寺号＋役職サイズ</span><div><button class="btn small" data-adj="sideScale" data-delta="-0.05">−</button><strong id="sideScaleLabel">100%</strong><button class="btn small" data-adj="sideScale" data-delta="0.05">＋</button></div></div><div class="offering-control"><span>寺号＋役職の上下位置</span><div><button class="btn small" data-adj="sideOffsetMm" data-delta="-3">↑</button><strong id="sideOffsetMmLabel">0mm</strong><button class="btn small" data-adj="sideOffsetMm" data-delta="3">↓</button></div></div>`}<div class="offering-control"><span>「御供」サイズ</span><div><button class="btn small" data-adj="headingScale" data-delta="-0.05">−</button><strong id="headingScaleLabel">100%</strong><button class="btn small" data-adj="headingScale" data-delta="0.05">＋</button></div></div><button class="btn wide" id="offeringReset" style="margin-top:12px">自動配置に戻す</button></div></div>`;
+  document.body.append(back);
+  let canvas=null;
+  const labels=()=>{
+    const pct=k=>`${Math.round((adjust[k]||1)*100)}%`;
+    const set=(id,v)=>{const el=$('#'+id,back);if(el)el.textContent=v};
+    set('mainScaleLabel',pct('mainScale'));set('mainGapScaleLabel',pct('mainGapScale'));set('mainOffsetMmLabel',`${adjust.mainOffsetMm>0?'+':''}${adjust.mainOffsetMm}mm`);set('sideScaleLabel',pct('sideScale'));set('sideOffsetMmLabel',`${adjust.sideOffsetMm>0?'+':''}${adjust.sideOffsetMm}mm`);set('headingScaleLabel',pct('headingScale'));
+  };
+  const redraw=()=>{canvas=offeringCanvas(r,adjust);const wrap=$('#offeringPreviewWrap',back);wrap.innerHTML='';wrap.append(canvas);labels()};
+  redraw();
+  $('#offeringCancel',back).onclick=()=>back.remove();
+  $('#offeringEdit',back).onclick=()=>{$('#offeringEditor',back).classList.toggle('hidden')};
+  $$('[data-adj]',back).forEach(b=>b.onclick=()=>{const k=b.dataset.adj;const d=Number(b.dataset.delta);adjust[k]=Number(((adjust[k]??(k.includes('Offset')?0:1))+d).toFixed(2));redraw()});
+  $('#offeringReset',back).onclick=()=>{adjust=defaultOfferingAdjust();redraw();toast('自動配置に戻しました')};
+  $('#offeringPdf',back).onclick=()=>{makeOfferingPdf(r,canvas);back.remove()};
+  return back;
 }
 function openOfferingPrint(r){offeringPreviewModal(r)}
 function makeOfferingPdf(r,canvas){
