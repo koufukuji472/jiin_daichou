@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.13';
+const APP_VERSION = '0.15';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -23,11 +23,26 @@ function hiraToKata(s=''){return s.replace(/[ぁ-ゖ]/g,ch=>String.fromCharCode(
 function norm(s=''){return hiraToKata(String(s).normalize('NFKC')).replace(/[\s　]/g,'').toUpperCase();}
 function roleFromCol(c){return c.startsWith('寺族')?'寺族':c}
 function blankMoney(){const o={};[...INCOME,...EXPENSE].forEach(k=>o[k]=null);return o}
-function blankRecord(kind='本人', parent=null){return {no:null,id: kind==='本人'?nextParentId():nextChildId(parent?.id),parentId:parent?.id||'',kind,carrierId:parent?.id||'',office:'第1宗務所',district:'',templeNo:'',temple:'',role:'',name:'',assignment:'',note:'',money:blankMoney(),guide:{謝誼:'',回心:''}}}
+function blankRecord(kind='本人', parent=null){return {no:null,id: kind==='本人'?nextParentId():nextChildId(parent?.id),parentId:parent?.id||'',kind,carrierId:parent?.id||'',office:'第1宗務所',district:'',templeNo:'',temple:'',role:'',name:'',assignment:'',note:'',money:blankMoney()}}
 function parentNum(id){const m=/^P(\d{3,})$/.exec(id||'');return m?Number(m[1]):0}
 function nextParentId(){let m=0;state.records.forEach(r=>{if(!r.parentId)m=Math.max(m,parentNum(r.id))});if(state.draft&&!state.draft.parentId)m=Math.max(m,parentNum(state.draft.id));return 'P'+String(m+1).padStart(3,'0')}
 function nextChildId(parentId){let m=0;state.records.forEach(r=>{const q=new RegExp('^'+parentId+'-(\\d+)$').exec(r.id||'');if(q)m=Math.max(m,Number(q[1]))});return parentId+'-'+String(m+1).padStart(2,'0')}
 function sum(keys,r){return keys.reduce((a,k)=>a+(r.money[k]===null?0:Number(r.money[k])||0),0)}
+function isUnannounced(r){return r?.assignment==='未案内'}
+function guidedExpenseKey(base,r){return `${base}（${isUnannounced(r)?'未案内':'案内有'}）`}
+function syncGuidedExpenseColumns(r){
+  if(!r?.money)return;
+  for(const base of ['本葬謝誼','本葬回心']){
+    const target=guidedExpenseKey(base,r);
+    const other=`${base}（${isUnannounced(r)?'案内有':'未案内'}）`;
+    const tv=r.money[target], ov=r.money[other];
+    if(ov!==null&&ov!==undefined&&ov!==''){
+      if(tv===null||tv===undefined||tv==='')r.money[target]=ov;
+      // 新仕様では案内/未案内は配役で一意に決まるため、反対側は空欄に戻す。
+      r.money[other]=null;
+    }
+  }
+}
 function displayPerson(r){return [r.district,r.temple,r.name,r.role,r.assignment].filter(Boolean).join(' / ')}
 function templeReadingForRecord(r){
   const all=[...state.fixedTemples,...state.addedDirectory.temples];
@@ -109,11 +124,15 @@ ${people.length?`<div class="section-title">名簿登録人物</div><div class="
 ${moneyPanel(r)}
 <div class="card"><div class="grid2">${r.kind==='本人'&&!state.editId?'<button class="btn" id="addDeposit">＋ 預かりを追加</button>':''}<button class="btn primary" id="commitRecord">${state.editId?'更新':'登録'}</button></div>${state.editId?'<button class="btn danger wide" id="deleteRecord" style="margin-top:10px">削除</button>':''}</div>`}
 
-function moneyPanel(r){const isI=state.mode==='income';const groups=isI?[['密葬',['密葬香資','密葬供花','密葬供物']],['本葬',['本葬香資','本葬供花料','本葬供物料']],['その他',['問候','献香']]]:[['密葬',['密葬謝誼']],['中陰',['密葬回心','中陰謝誼']],['本葬前',['本葬謝誼']],['本葬',['本葬回心']],['その他',['路資','菓誼','内謝']]];
-return `<div class="card ${isI?'income-panel':'expense-panel'}"><h3 style="color:${isI?'var(--income)':'var(--expense)'}">${isI?'収入':'支出'}入力</h3>${groups.map(([g,items])=>`<div class="section-title">${g}</div>${items.map(item=>moneyRow(r,item)).join('')}`).join('')}<div class="sticky-summary"><span>${isI?'収入':'支出'}小計</span><span class="amount">${fmt(sum(isI?INCOME:EXPENSE,r))} 円</span></div></div>`}
-function moneyRow(r,item){let key=item;if(item==='本葬謝誼'){const g=r.guide.謝誼||'有';key=`本葬謝誼（${g==='有'?'案内有':'未案内'}）`}if(item==='本葬回心'){const g=r.guide.回心||'有';key=`本葬回心（${g==='有'?'案内有':'未案内'}）`}
-const guide=item==='本葬謝誼'?`<div class="chips" style="margin-top:6px"><button class="chip small ${r.guide.謝誼==='有'?'selected':''}" data-guide="謝誼:有">案内有</button><button class="chip small ${r.guide.謝誼==='無'?'selected':''}" data-guide="謝誼:無">未案内</button></div>`:item==='本葬回心'?`<div class="chips" style="margin-top:6px"><button class="chip small ${r.guide.回心==='有'?'selected':''}" data-guide="回心:有">案内有</button><button class="chip small ${r.guide.回心==='無'?'selected':''}" data-guide="回心:無">未案内</button></div>`:'';
-return `<div class="money-item"><div><strong>${esc(item)}</strong>${guide}</div><button class="money-btn ${r.money[key]!==null?'filled':''}" data-money="${esc(key)}">${r.money[key]===null?'＋入力':fmt(r.money[key])+' 円'}</button></div>`}
+function moneyPanel(r){const isI=state.mode==='income';
+if(isI){
+  const groups=[['密葬',['密葬香資','密葬供花','密葬供物']],['本葬',['本葬香資','本葬供花料','本葬供物料']]];
+  return `<div class="card income-panel"><h3 style="color:var(--income)">収入入力</h3>${groups.map(([g,items])=>`<div class="section-title">${g}</div>${items.map(item=>moneyRow(r,item)).join('')}`).join('')}<div class="offering-print-area"><button class="btn wide offering-print-btn" id="offeringPrint">御供札プリント</button><div class="muted" style="margin-top:6px">現在の寺号・役職・氏名から札PDFを作成します</div></div><div class="section-title">その他</div>${['問候','献香'].map(item=>moneyRow(r,item)).join('')}<div class="sticky-summary"><span>収入小計</span><span class="amount">${fmt(sum(INCOME,r))} 円</span></div></div>`;
+}
+const groups=[['密葬',['密葬謝誼']],['中陰',['密葬回心','中陰謝誼']],['本葬前',['本葬謝誼']],['本葬',['本葬回心']],['その他',['路資','菓誼','内謝']]];
+return `<div class="card expense-panel"><h3 style="color:var(--expense)">支出入力</h3>${groups.map(([g,items])=>`<div class="section-title">${g}</div>${items.map(item=>moneyRow(r,item)).join('')}`).join('')}<div class="sticky-summary"><span>支出小計</span><span class="amount">${fmt(sum(EXPENSE,r))} 円</span></div></div>`}
+function moneyRow(r,item){let key=item;if(item==='本葬謝誼'||item==='本葬回心')key=guidedExpenseKey(item,r);
+return `<div class="money-item"><div><strong>${esc(item)}</strong></div><button class="money-btn ${r.money[key]!==null?'filled':''}" data-money="${esc(key)}">${r.money[key]===null?'＋入力':fmt(r.money[key])+' 円'}</button></div>`}
 function modeBar(){return `<div class="modebar"><button class="btn ${state.mode==='income'?'income':''}" data-mode="income">収入</button><button class="btn ${state.mode==='expense'?'expense':''}" data-mode="expense">支出</button></div>`}
 
 function searchResultsMarkup(){const list=state.records.filter(r=>recordMatchesPrefix(r,state.search));return list.map(r=>`<button class="search-result ${r.kind==='預かり'?'child':''}" data-edit="${esc(r.id)}" style="width:100%;text-align:left"><div class="row"><div class="grow"><div class="title">${esc(r.id)}　${esc(r.name||'氏名なし')}</div><div class="meta">${esc([r.district,r.temple,r.role,r.assignment].filter(Boolean).join(' / '))}</div></div><span class="pill ${r.kind==='預かり'?'child':''}">${esc(r.kind)}</span></div></button>`).join('')||'<div class="card muted">該当データなし</div>'}
@@ -148,12 +167,12 @@ $$('[data-role]').forEach(b=>b.onclick=()=>{r.role=b.dataset.role;autoSave();ren
 const rm=$('#roleManual');if(rm)rm.oninput=()=>{if(rm.value.trim())r.role=rm.value.trim();autoSave();showCandidateAction()};
 const people=peopleForTemple(r);$$('[data-person-index]').forEach(b=>b.onclick=()=>{const p=people[Number(b.dataset.personIndex)];if(p){r.role=p.role;r.name=p.name;autoSave();render()}});
 const nf=$('#nameField');if(nf)nf.oninput=()=>{r.name=nf.value;autoSave();showCandidateAction()};
-const as=$('#assignmentSelect');if(as)as.onchange=()=>{if(as.value==='__manual__'){r.assignment='';render()}else{r.assignment=as.value;autoSave();render()}};
-const am=$('#assignmentManual');if(am)am.oninput=()=>{r.assignment=am.value;autoSave()};
+const as=$('#assignmentSelect');if(as)as.onchange=()=>{if(as.value==='__manual__'){r.assignment='';syncGuidedExpenseColumns(r);autoSave();render()}else{r.assignment=as.value;syncGuidedExpenseColumns(r);autoSave();render()}};
+const am=$('#assignmentManual');if(am)am.oninput=()=>{r.assignment=am.value;syncGuidedExpenseColumns(r);autoSave()};
 const nt=$('#noteField');if(nt)nt.oninput=()=>{r.note=nt.value;autoSave()};
 $$('[data-mode]').forEach(b=>b.onclick=()=>{state.mode=b.dataset.mode;render()});
-$$('[data-guide]').forEach(b=>b.onclick=()=>{const [k,v]=b.dataset.guide.split(':');const old=r.guide[k];if(old&&old!==v){const oldKey=`本葬${k}（${old==='有'?'案内有':'未案内'}）`;const newKey=`本葬${k}（${v==='有'?'案内有':'未案内'}）`;if(r.money[newKey]===null)r.money[newKey]=r.money[oldKey];r.money[oldKey]=null}r.guide[k]=v;autoSave();render()});
 $$('[data-money]').forEach(b=>b.onclick=()=>openMoney(b.dataset.money));
+const op=$('#offeringPrint');if(op)op.onclick=()=>openOfferingPrint(r);
 const commit=$('#commitRecord');if(commit)commit.onclick=commitRecord;
 const startDeposit=()=>{if(!r.name.trim()){toast('先に持参者の氏名を入力してください');return}const parentId=r.id;const ok=commitRecord(false,false);if(!ok)return;const p=state.records.find(x=>x.id===parentId);if(!p){toast('親レコードを確認できませんでした');return}const child=blankRecord('預かり',p);state.draft=child;state.editId=null;state.mode='income';state.screen='form';autoSave();render();scrollPageTop();toast(`預かり ${child.id} の入力を開始しました`)};
 const dep=$('#addDeposit');if(dep)dep.onclick=startDeposit;const depTop=$('#addDepositTop');if(depTop)depTop.onclick=startDeposit;
@@ -164,8 +183,50 @@ showCandidateAction();
 function showCandidateAction(){const box=$('#candidateAction');if(!box||!state.draft)return;const r=state.draft;const people=peopleForTemple(r);const known=people.some(p=>norm(p.role)===norm(r.role)&&norm(p.name)===norm(r.name));if(r.name.trim()&&!known)box.classList.remove('hidden');else box.classList.add('hidden')}
 function addCandidateFromDraft(){const r=state.draft;if(r.temple&&!r.templeNo){const exists=[...state.fixedTemples,...state.addedDirectory.temples].some(t=>norm(t['寺院名'])===norm(r.temple)&&t['教区']===r.district);if(!exists)state.addedDirectory.temples.push({'宗務所':r.office||'第1宗務所','教区':r.district,'寺籍番号':'','寺院名':r.temple,'フリガナ':'','住所（数字）':'','住所（漢数字）':'','住職':'','東堂':'','副住職':'','徒弟':'','御山内':'','寺族1':'','寺族2':''})}if(r.name&&r.temple){const exists=state.addedDirectory.people.some(p=>norm(p.name)===norm(r.name)&&norm(p.role)===norm(r.role)&&((r.templeNo&&p.templeNo===r.templeNo)||p.temple===r.temple));if(!exists)state.addedDirectory.people.push({templeNo:r.templeNo,district:r.district,temple:r.temple,role:r.role,name:r.name})}autoSave()}
 
+function offeringLabelData(r){
+  return {temple:(r.temple||'').trim(),role:(r.role||'').trim(),name:(r.name||'').trim()};
+}
+function drawSpacedHorizontal(ctx,text,cx,y,fontPx,gapPx){
+  const chars=[...text];ctx.font=`600 ${fontPx}px \"Hiragino Mincho ProN\",\"Yu Mincho\",\"YuMincho\",serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  const widths=chars.map(ch=>ctx.measureText(ch).width);const total=widths.reduce((a,b)=>a+b,0)+gapPx*Math.max(0,chars.length-1);let x=cx-total/2;
+  chars.forEach((ch,i)=>{const w=widths[i];ctx.fillText(ch,x+w/2,y);x+=w+gapPx});
+}
+function drawVerticalChars(ctx,text,x,startY,fontPx,stepPx,weight=600){
+  const chars=[...String(text||'').replace(/[\s　]/g,'')];ctx.font=`${weight} ${fontPx}px \"Hiragino Mincho ProN\",\"Yu Mincho\",\"YuMincho\",serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  chars.forEach((ch,i)=>ctx.fillText(ch,x,startY+i*stepPx));
+}
+function offeringCanvas(r){
+  const MM=8, W=Math.round(148.5*MM), H=Math.round(420*MM);const c=document.createElement('canvas');c.width=W;c.height=H;const ctx=c.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.fillStyle='#000';
+  drawSpacedHorizontal(ctx,'御供',W/2,30*MM,42/72*25.4*MM,8*MM);
+  const {temple,role,name}=offeringLabelData(r);
+  if(role==='住職'){
+    const n=Math.max(1,[...temple.replace(/[\s　]/g,'')].length);const fontMm=n<=3?39:n===4?34:n===5?30:26;const stepMm=n<=3?55:n===4?47:n===5?40:34;const span=(n-1)*stepMm;const start=Math.max(95,195-span/2);
+    drawVerticalChars(ctx,temple,W/2,start*MM,fontMm*MM,stepMm*MM,600);
+  }else{
+    const nm=[...name.replace(/[\s　]/g,'')].length||1;const fontMm=nm<=4?33:nm===5?29:nm===6?26:23;const stepMm=nm<=4?48:nm===5?42:nm===6?37:33;const span=(nm-1)*stepMm;const start=Math.max(88,190-span/2);
+    drawVerticalChars(ctx,name,62*MM,start*MM,fontMm*MM,stepMm*MM,600);
+    const side=[temple,role].filter(Boolean).join('');const sn=[...side].length||1;const sideStep=sn<=6?24:sn<=8?20:17;const sideFont=sn<=6?14:sn<=8?12:10.5;
+    drawVerticalChars(ctx,side,112*MM,92*MM,sideFont*MM,sideStep*MM,500);
+  }
+  return c;
+}
+function offeringPreviewModal(r){
+  const data=offeringLabelData(r);if(!data.name){toast('氏名を入力してください');return null}if(data.role==='住職'&&!data.temple){toast('住職の御供札には寺号が必要です');return null}
+  const c=offeringCanvas(r);const back=document.createElement('div');back.className='modal-backdrop';back.innerHTML=`<div class=\"modal offering-modal\"><h3>御供札プレビュー</h3><div class=\"offering-preview-wrap\"></div><div class=\"muted\" style=\"margin:8px 0 12px\">148.5 × 420mm / 敬称なし / 見出し「御供」</div><div class=\"grid2\"><button class=\"btn\" id=\"offeringCancel\">戻る</button><button class=\"btn primary\" id=\"offeringPdf\">PDFを開く</button></div></div>`;document.body.append(back);$('.offering-preview-wrap',back).append(c);$('#offeringCancel',back).onclick=()=>back.remove();$('#offeringPdf',back).onclick=()=>{makeOfferingPdf(r,c);back.remove()};return back;
+}
+function openOfferingPrint(r){offeringPreviewModal(r)}
+function makeOfferingPdf(r,canvas){
+  const JSPDF=window.jspdf?.jsPDF;if(!JSPDF){alert('PDFライブラリを読み込めていません。初回だけインターネット接続が必要です。');return}
+  try{
+    const pdf=new JSPDF({orientation:'portrait',unit:'mm',format:[148.5,420],compress:true});const img=canvas.toDataURL('image/jpeg',0.96);pdf.addImage(img,'JPEG',0,0,148.5,420,undefined,'FAST');
+    const blob=pdf.output('blob');const url=URL.createObjectURL(blob);const opened=window.open(url,'_blank');if(!opened){downloadBlob(blob,offeringPdfName(r));toast('PDFを保存しました')}else{setTimeout(()=>URL.revokeObjectURL(url),60000)}
+  }catch(e){console.error(e);alert('御供札PDFを作成できませんでした。\n'+e.message)}
+}
+function offeringPdfName(r){const d=offeringLabelData(r);const who=d.role==='住職'?d.temple:d.name;return safeName(`御供札_${who||'札'}`)+'.pdf'}
+
 function openMoney(key){moneyTarget=key;moneyValue=state.draft.money[key]===null?0:Number(state.draft.money[key])||0;const back=document.createElement('div');back.className='modal-backdrop';back.innerHTML=`<div class="modal"><h3>${esc(key)}</h3><div class="big-amount" id="moneyDisplay">${fmt(moneyValue)} 円</div><div class="quick-grid">${[10000,20000,30000,50000,100000].map(n=>`<button class="btn" data-quick="${n}">${fmt(n)}</button>`).join('')}</div><div class="section-title">手動入力</div><input id="moneyManual" class="field field-lg" inputmode="numeric" placeholder="金額を直接入力"><div class="grid3" style="margin-top:12px"><button class="btn" id="moneyClear">クリア</button><button class="btn" id="moneyCancel">キャンセル</button><button class="btn primary" id="moneyOk">決定</button></div></div>`;document.body.append(back);const disp=()=>$('#moneyDisplay',back).textContent=fmt(moneyValue)+' 円';$$('[data-quick]',back).forEach(b=>b.onclick=()=>{moneyValue+=Number(b.dataset.quick);disp()});$('#moneyManual',back).oninput=e=>{const v=e.target.value.replace(/[^0-9]/g,'');if(v!==''){moneyValue=Number(v);disp()}};$('#moneyClear',back).onclick=()=>{moneyValue=0;disp();$('#moneyManual',back).value=''};$('#moneyCancel',back).onclick=()=>back.remove();$('#moneyOk',back).onclick=()=>{state.draft.money[moneyTarget]=moneyValue===0?0:moneyValue;back.remove();autoSave();render()};}
-function commitRecord(goHome=true,renderAfter=true){const r=state.draft;if(!r||!r.name.trim()){toast('氏名は必須です');return false}delete r._templeQuery;const destination=state.returnScreen||'home';if(state.editId){const i=state.records.findIndex(x=>x.id===state.editId);if(i<0){toast('更新対象が見つかりません');return false}state.records[i]=JSON.parse(JSON.stringify(r));toast('更新しました')}else{if(state.records.some(x=>x.id===r.id)){toast('IDが重複しています');return false}state.records.push(JSON.parse(JSON.stringify(r)));toast('登録しました')}state.editId=null;state.draft=null;if(goHome){state.screen=destination;state.returnScreen=null}autoSave();if(renderAfter)render();return true}
+function commitRecord(goHome=true,renderAfter=true){const r=state.draft;if(!r||!r.name.trim()){toast('氏名は必須です');return false}syncGuidedExpenseColumns(r);delete r._templeQuery;const destination=state.returnScreen||'home';if(state.editId){const i=state.records.findIndex(x=>x.id===state.editId);if(i<0){toast('更新対象が見つかりません');return false}state.records[i]=JSON.parse(JSON.stringify(r));toast('更新しました')}else{if(state.records.some(x=>x.id===r.id)){toast('IDが重複しています');return false}state.records.push(JSON.parse(JSON.stringify(r)));toast('登録しました')}state.editId=null;state.draft=null;if(goHome){state.screen=destination;state.returnScreen=null}autoSave();if(renderAfter)render();return true}
 function deleteRecord(){const r=state.draft;const destination=state.returnScreen||'home';const children=state.records.filter(x=>x.parentId===r.id);let msg=`${r.id} ${r.name} を削除しますか？`;if(children.length)msg+=`\n\n預かり ${children.length}件も一緒に削除されます。`;if(!confirm(msg))return;const ids=new Set([r.id,...children.map(x=>x.id)]);state.records=state.records.filter(x=>{if(ids.has(x.id)){state.deleted.unshift({record:JSON.parse(JSON.stringify(x)),deletedAt:new Date().toISOString()});return false}return true});state.draft=null;state.editId=null;state.screen=destination;state.returnScreen=null;autoSave();render();toast('削除しました')}
 
 function snapshotTableScroll(){const w=$('#tableWrap');if(w)state.tableScroll={top:w.scrollTop,left:w.scrollLeft}}
@@ -182,15 +243,15 @@ function backupDirectory(){const blob=new Blob([JSON.stringify({version:1,export
 function restoreDirectory(file){if(!file)return;const fr=new FileReader();fr.onload=()=>{try{const j=JSON.parse(fr.result);state.addedDirectory={temples:Array.isArray(j.temples)?j.temples:[],people:Array.isArray(j.people)?j.people:[]};autoSave();render();toast('追加名簿を読み込みました')}catch(e){alert('JSONを読み込めませんでした')}};fr.readAsText(file)}
 function reloadFixedDirectory(file){if(!file)return;if(typeof XLSX==='undefined'){alert('Excelライブラリを読み込めていません。初回だけインターネット接続が必要です。');return}const fr=new FileReader();fr.onload=()=>{try{const wb=XLSX.read(fr.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{defval:''});const req=['宗務所','教区','寺籍番号','寺院名','フリガナ','住職','東堂','副住職','徒弟','御山内','寺族1','寺族2'];const miss=req.filter(h=>!(h in (rows[0]||{})));if(miss.length)throw new Error('不足列: '+miss.join('、'));state.fixedTemples=rows;dbSet('fixedTemplesOverride',rows);render();toast('第1宗務所名簿を更新しました')}catch(e){alert('名簿を読み込めませんでした。\n'+e.message)}};fr.readAsArrayBuffer(file)}
 
-function rowFromRecord(r,no){const o={'No.':no,'レコードID':r.id,'親ID':r.parentId||'','受付区分':r.kind,'持参者ID':r.carrierId||'','宗務所':r.office||'第1宗務所','教区':r.district||'','寺籍番号':r.templeNo||'','寺号':r.temple||'','役職':r.role||'','氏名':r.name||'','配役':r.assignment||'','備考':r.note||''};INCOME.forEach(k=>o[k]=r.money[k]===null?'':r.money[k]);o['プラス小計']=sum(INCOME,r);EXPENSE.forEach(k=>o[k]=r.money[k]===null?'':r.money[k]);o['マイナス小計']=sum(EXPENSE,r);return o}
-function recordFromRow(row){const money=blankMoney();INCOME.concat(EXPENSE).forEach(k=>{const v=row[k];money[k]=(v===undefined||v===null||v==='')?null:Number(v)});const id=String(row['レコードID']||'');return {no:row['No.']||null,id,parentId:String(row['親ID']||''),kind:row['受付区分']||'本人',carrierId:String(row['持参者ID']||''),office:row['宗務所']||'第1宗務所',district:row['教区']||'',templeNo:String(row['寺籍番号']||''),temple:row['寺号']||'',role:row['役職']||'',name:row['氏名']||'',assignment:row['配役']||'',note:row['備考']||'',money,guide:{謝誼:money['本葬謝誼（未案内）']!==null?'無':money['本葬謝誼（案内有）']!==null?'有':'',回心:money['本葬回心（未案内）']!==null?'無':money['本葬回心（案内有）']!==null?'有':''}}}
+function rowFromRecord(r,no){syncGuidedExpenseColumns(r);const o={'No.':no,'レコードID':r.id,'親ID':r.parentId||'','受付区分':r.kind,'持参者ID':r.carrierId||'','宗務所':r.office||'第1宗務所','教区':r.district||'','寺籍番号':r.templeNo||'','寺号':r.temple||'','役職':r.role||'','氏名':r.name||'','配役':r.assignment||'','備考':r.note||''};INCOME.forEach(k=>o[k]=r.money[k]===null?'':r.money[k]);o['プラス小計']=sum(INCOME,r);EXPENSE.forEach(k=>o[k]=r.money[k]===null?'':r.money[k]);o['マイナス小計']=sum(EXPENSE,r);return o}
+function recordFromRow(row){const money=blankMoney();INCOME.concat(EXPENSE).forEach(k=>{const v=row[k];money[k]=(v===undefined||v===null||v==='')?null:Number(v)});const id=String(row['レコードID']||'');const r={no:row['No.']||null,id,parentId:String(row['親ID']||''),kind:row['受付区分']||'本人',carrierId:String(row['持参者ID']||''),office:row['宗務所']||'第1宗務所',district:row['教区']||'',templeNo:String(row['寺籍番号']||''),temple:row['寺号']||'',role:row['役職']||'',name:row['氏名']||'',assignment:row['配役']||'',note:row['備考']||'',money};syncGuidedExpenseColumns(r);return r}
 function importExcel(file){if(!file)return;if(typeof XLSX==='undefined'){alert('Excelライブラリを読み込めていません。初回起動時はインターネット接続が必要です。');return}const fr=new FileReader();fr.onload=()=>{try{const wb=XLSX.read(fr.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];const rows=XLSX.utils.sheet_to_json(ws,{defval:''});if(!rows.length)throw new Error('データがありません');const headers=Object.keys(rows[0]);const required=['レコードID','受付区分','氏名',...INCOME,...EXPENSE];const miss=required.filter(h=>!headers.includes(h));if(miss.length)throw new Error('必要列が見つかりません：'+miss.join('、'));const ids=new Set();const recs=rows.map(recordFromRow).filter(r=>r.id&&r.name);for(const r of recs){if(ids.has(r.id))throw new Error('レコードIDが重複しています：'+r.id);ids.add(r.id)}state.records=recs;state.baseName=file.name.replace(/\.xlsx?$/i,'').replace(/_\d{4}_\d{4}$/,'');state.sourceLoaded=true;state.draft=null;state.editId=null;autoSave();render();toast('Excelを読み込みました')}catch(e){alert('このExcelは読み込めません。\n\n'+e.message+'\n\n列構造を確認してください。')}};fr.readAsArrayBuffer(file)}
 function exportExcel(){if(typeof XLSX==='undefined'){alert('Excelライブラリを読み込めていません。初回起動時はインターネット接続が必要です。');return}const data=state.records.map((r,i)=>rowFromRecord(r,i+1));const ws=XLSX.utils.json_to_sheet(data,{header:APP_HEADERS});ws['!cols']=APP_HEADERS.map(h=>({wch:({'No.':6,'レコードID':11,'親ID':11,'受付区分':9,'持参者ID':11,'宗務所':11,'教区':9,'寺籍番号':9,'寺号':7,'役職':9,'氏名':16,'配役':18,'備考':24,'プラス小計':13,'マイナス小計':13}[h]||([...INCOME,...EXPENSE].includes(h)?12:11))}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'受付台帳');const filename=safeName(state.baseName)+'_'+stamp()+'.xlsx';XLSX.writeFile(wb,filename,{compression:true});toast('Excel保存を開始しました')}
 function stamp(){const d=new Date();return String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'_'+String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0')}
 function safeName(s){return (s||'本葬受付台帳').replace(/[\\/:*?"<>|]/g,'_')}
 function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 
-async function init(){try{const w=await dbGet('workspace');if(w){state.records=Array.isArray(w.records)?w.records:[];state.draft=w.draft||null;state.baseName=w.baseName||state.baseName;state.sourceLoaded=!!w.sourceLoaded;state.deleted=Array.isArray(w.deleted)?w.deleted:[];state.search=w.search||'';state.filters={district:'',kind:'',guide:'',...(w.filters||{})};state.tableView=w.tableView==='full'?'full':'normal'}const a=await dbGet('addedDirectory');if(a)state.addedDirectory=a;const f=await dbGet('fixedTemplesOverride');if(Array.isArray(f)&&f.length)state.fixedTemples=f}catch(e){console.warn(e)}if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+async function init(){try{const w=await dbGet('workspace');if(w){state.records=Array.isArray(w.records)?w.records:[];state.records.forEach(syncGuidedExpenseColumns);state.draft=w.draft||null;if(state.draft)syncGuidedExpenseColumns(state.draft);state.baseName=w.baseName||state.baseName;state.sourceLoaded=!!w.sourceLoaded;state.deleted=Array.isArray(w.deleted)?w.deleted:[];state.search=w.search||'';state.filters={district:'',kind:'',guide:'',...(w.filters||{})};state.tableView=w.tableView==='full'?'full':'normal'}const a=await dbGet('addedDirectory');if(a)state.addedDirectory=a;const f=await dbGet('fixedTemplesOverride');if(Array.isArray(f)&&f.length)state.fixedTemples=f}catch(e){console.warn(e)}if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   try{
     const reg=await navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'});
     // GitHub Pagesを更新した直後でも新版確認を促す。

@@ -1,5 +1,5 @@
-const VERSION = '0.13';
-const CACHE = 'temple-reception-v013';
+const VERSION = '0.15';
+const CACHE = 'temple-reception-v015';
 const LOCAL = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const LOCAL = [
   './manifest.webmanifest'
 ];
 const XLSX = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+const JSPDF = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js';
 
 self.addEventListener('install', event => {
   // 新版を待機状態にせず、できるだけ早く有効化する。
@@ -22,11 +23,13 @@ self.addEventListener('install', event => {
         if (response && response.ok) await cache.put(url, response.clone());
       } catch (_) {}
     }
-    // SheetJS はオフライン用に可能なら保存。
-    try {
-      const response = await fetch(XLSX, { mode: 'no-cors', cache: 'reload' });
-      if (response) await cache.put(XLSX, response.clone());
-    } catch (_) {}
+    // 外部ライブラリはオフライン用に可能なら保存。
+    for (const lib of [XLSX, JSPDF]) {
+      try {
+        const response = await fetch(lib, { mode: 'no-cors', cache: 'reload' });
+        if (response) await cache.put(lib, response.clone());
+      } catch (_) {}
+    }
   })());
 });
 
