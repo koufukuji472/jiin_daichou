@@ -1,14 +1,14 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.12';
+const APP_VERSION = '0.13';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
 const EXPENSE = ['密葬謝誼','密葬回心','中陰謝誼','本葬謝誼（案内有）','本葬謝誼（未案内）','本葬回心（案内有）','本葬回心（未案内）','路資','菓誼','内謝'];
 const APP_HEADERS = ['No.','レコードID','親ID','受付区分','持参者ID','宗務所','教区','寺籍番号','寺号','役職','氏名','配役','備考',...INCOME,'プラス小計',...EXPENSE,'マイナス小計'];
 const FULL_COL_WIDTH={
-  '寺号':72,'No.':48,'レコードID':78,'親ID':78,'受付区分':64,'持参者ID':78,'宗務所':82,'教区':72,'寺籍番号':70,
-  '役職':72,'氏名':108,'配役':112,'備考':150,'プラス小計':98,'マイナス小計':98
+  'No.':46,'寺号':64,'氏名':108,'レコードID':78,'親ID':78,'受付区分':64,'持参者ID':78,'宗務所':82,'教区':72,'寺籍番号':70,
+  '役職':72,'配役':112,'備考':150,'プラス小計':98,'マイナス小計':98
 };
 function fullColWidth(h){return FULL_COL_WIDTH[h]||([...INCOME,...EXPENSE].includes(h)?88:82)}
 function fullColStyle(h){const w=fullColWidth(h);return `width:${w}px;min-width:${w}px;max-width:${w}px`}
@@ -124,7 +124,8 @@ function filteredRecords(){return state.records.filter(r=>{const textOk=recordMa
 function actualNo(r){const i=state.records.findIndex(x=>x.id===r.id);return i>=0?i+1:''}
 function tableMarkup(rows){if(state.tableView==='full')return fullTableMarkup(rows);return normalTableMarkup(rows)}
 function normalTableMarkup(rows){return `<div class="table-wrap table-normal" id="tableWrap"><table><thead><tr>${['No.','ID','区分','教区','寺号','役職','氏名','配役','収入小計','支出小計','親ID','持参者ID'].map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr class="clickable ${r.kind==='預かり'?'child':''}" data-edit="${esc(r.id)}"><td>${actualNo(r)}</td><td>${esc(r.id)}</td><td>${esc(r.kind)}</td><td>${esc(r.district)}</td><td>${esc(r.temple)}</td><td>${esc(r.role)}</td><td><strong>${esc(r.name)}</strong></td><td>${esc(r.assignment)}</td><td>${fmt(sum(INCOME,r))}</td><td>${fmt(sum(EXPENSE,r))}</td><td>${esc(r.parentId)}</td><td>${esc(r.carrierId)}</td></tr>`).join('')}</tbody></table></div>`}
-function fullTableMarkup(rows){const moneyHeaders=new Set([...INCOME,'プラス小計',...EXPENSE,'マイナス小計']);const displayHeaders=['寺号',...APP_HEADERS.filter(h=>h!=='寺号')];const totalWidth=displayHeaders.reduce((a,h)=>a+fullColWidth(h),0);return `<div class="table-wrap table-full" id="tableWrap"><table style="width:${totalWidth}px;min-width:${totalWidth}px"><colgroup>${displayHeaders.map(h=>`<col style="width:${fullColWidth(h)}px">`).join('')}</colgroup><thead><tr>${displayHeaders.map(x=>`<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>{const row=rowFromRecord(r,actualNo(r));return `<tr class="clickable ${r.kind==='預かり'?'child':''}" data-edit="${esc(r.id)}">${displayHeaders.map(h=>{const v=row[h];const shown=moneyHeaders.has(h)&&v!==''?fmt(v):v;return `<td title="${esc(shown)}">${h==='氏名'?`<strong>${esc(shown)}</strong>`:esc(shown)}</td>`}).join('')}</tr>`}).join('')}</tbody></table></div>`}
+function fullTableColClass(h){if(h==='プラス小計')return 'income-subtotal';if(h==='マイナス小計')return 'expense-subtotal';if(INCOME.includes(h))return 'income-col';if(EXPENSE.includes(h))return 'expense-col';return ''}
+function fullTableMarkup(rows){const moneyHeaders=new Set([...INCOME,'プラス小計',...EXPENSE,'マイナス小計']);const fixed=['No.','寺号','氏名'];const displayHeaders=[...fixed,...APP_HEADERS.filter(h=>!fixed.includes(h))];const totalWidth=displayHeaders.reduce((a,h)=>a+fullColWidth(h),0);return `<div class="table-wrap table-full" id="tableWrap"><table style="width:${totalWidth}px;min-width:${totalWidth}px"><colgroup>${displayHeaders.map(h=>`<col style="width:${fullColWidth(h)}px">`).join('')}</colgroup><thead><tr>${displayHeaders.map(x=>`<th class="${fullTableColClass(x)}">${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>{const row=rowFromRecord(r,actualNo(r));return `<tr class="clickable ${r.kind==='預かり'?'child':''}" data-edit="${esc(r.id)}">${displayHeaders.map(h=>{const v=row[h];const shown=moneyHeaders.has(h)&&v!==''?fmt(v):v;return `<td class="${fullTableColClass(h)}" title="${esc(shown)}">${h==='氏名'?`<strong>${esc(shown)}</strong>`:esc(shown)}</td>`}).join('')}</tr>`}).join('')}</tbody></table></div>`}
 
 function settingsView(){return `<div class="card"><h3>追加名簿</h3><p class="muted">追加寺院 ${state.addedDirectory.temples.length}件 / 追加人物 ${state.addedDirectory.people.length}件</p><div class="grid2"><button class="btn" id="backupDir">追加名簿JSONを書き出す</button><button class="btn" id="restoreDir">追加名簿JSONを読み込む</button></div><input id="dirFile" type="file" accept=".json" class="hidden"></div><div class="card"><h3>第1宗務所名簿</h3><p class="muted">アプリ内蔵：${state.fixedTemples.length}寺院。後から人物名を追記した最新版Excelを読み直すこともできます。</p><button class="btn" id="reloadDirectory">第1宗務所名簿.xlsx を読み込む</button><input id="directoryExcel" type="file" accept=".xlsx,.xls" class="hidden"></div><div class="card"><h3>作業状態</h3><button class="btn danger" id="clearWorkspace">作業データを全消去</button></div>`}
 function deletedView(){return `<div class="card"><div class="muted">削除履歴はこの端末のIndexedDBに残します。</div></div>${state.deleted.map((d,i)=>`<div class="search-result"><div class="row"><div class="grow"><div class="title">${esc(d.record.id)}　${esc(d.record.name)}</div><div class="meta">削除：${esc(new Date(d.deletedAt).toLocaleString('ja-JP'))} / ${esc([d.record.district,d.record.temple,d.record.role].filter(Boolean).join(' / '))}</div></div><button class="btn small" data-restore="${i}">復元</button></div></div>`).join('')||'<div class="card muted">削除履歴はありません。</div>'}`}
