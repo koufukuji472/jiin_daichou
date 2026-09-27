@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.20';
+const APP_VERSION = '0.21';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -220,7 +220,7 @@ function offeringCanvas(r,adjust=defaultOfferingAdjust()){
   ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.fillStyle='#000';
   // 見出しは最大サイズを基準にし、ユーザー調整は安全な範囲に制限する。
   const headingScale=clamp(adjust.headingScale||1,.7,1.45);
-  drawSpacedHorizontal(ctx,'御供',W/2,34*MM,26.4*headingScale*MM,20*headingScale*MM);
+  drawSpacedHorizontal(ctx,'御供',W/2,44*MM,26.4*headingScale*MM,20*headingScale*MM);
   const {temple,role,name}=offeringLabelData(r);
   if(role==='住職'){
     // 主文字安全領域を固定し、文字数に応じて最大限の大きさへ自動フィット。
