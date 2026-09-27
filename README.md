@@ -33,3 +33,14 @@ Excel読み書きには SheetJS を使用します。初回起動時だけライ
 - 親レコードの登録成功を確認してから、子ID（例: P001-01）を採番して預かり入力フォームへ遷移するよう変更。
 - 預かり入力画面では子ID・預かり区分・持参者を明示。
 - Service Worker のキャッシュ世代を更新し、古い app.js が残りにくいよう修正。
+
+## v0.4 更新点
+
+- Service Worker の `skipWaiting()` / `clients.claim()` により新版へ早く切り替えるよう変更
+- GitHub Pages 上のアプリ本体を Network First に変更（オンライン時は最新版を優先、オフライン時はキャッシュ）
+- Service Worker 登録時に `updateViaCache: 'none'` と `update()` を使用
+- 新しい Service Worker が有効になったとき、一度だけ自動再読み込み
+- 画面上部に `v0.4` を表示
+- 旧 `temple-reception-*` キャッシュを有効化時に削除
+
+※ IndexedDB の作業データ・追加名簿は、アプリ本体のキャッシュとは別領域です。通常のバージョン更新では削除しません。

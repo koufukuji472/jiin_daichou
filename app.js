@@ -1,5 +1,6 @@
 (() => {
 'use strict';
+const APP_VERSION = '0.4';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -31,7 +32,7 @@ async function dbSet(k,v){const d=await db();return new Promise((res,rej)=>{cons
 function autoSave(){clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{await dbSet('workspace',{records:state.records,draft:state.draft,baseName:state.baseName,sourceLoaded:state.sourceLoaded,deleted:state.deleted,updatedAt:new Date().toISOString()});await dbSet('addedDirectory',state.addedDirectory)},250)}
 
 function toast(msg){let t=$('.toast');if(t)t.remove();t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.append(t);setTimeout(()=>t.remove(),2200)}
-function top(title, sub=''){return `<div class="topbar"><button class="btn small ghost" id="homeBtn" style="color:#fff;border-color:#698096">⌂</button><h1>${esc(title)}</h1>${sub?`<div class="small">${esc(sub)}</div>`:''}</div>`}
+function top(title, sub=''){return `<div class="topbar"><button class="btn small ghost" id="homeBtn" style="color:#fff;border-color:#698096">⌂</button><h1>${esc(title)}</h1><div class="small">v${APP_VERSION}${sub?` ・ ${esc(sub)}`:''}</div></div>`}
 function shell(x){return `<div class="shell">${x}</div>`}
 function navHome(){state.screen='home';state.editId=null;state.draft=null;render();autoSave()}
 function bindHome(){const b=$('#homeBtn');if(b)b.onclick=()=>navHome()}
@@ -148,6 +149,19 @@ function stamp(){const d=new Date();return String(d.getMonth()+1).padStart(2,'0'
 function safeName(s){return (s||'本葬受付台帳').replace(/[\\/:*?"<>|]/g,'_')}
 function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 
-async function init(){try{const w=await dbGet('workspace');if(w){state.records=Array.isArray(w.records)?w.records:[];state.draft=w.draft||null;state.baseName=w.baseName||state.baseName;state.sourceLoaded=!!w.sourceLoaded;state.deleted=Array.isArray(w.deleted)?w.deleted:[]}const a=await dbGet('addedDirectory');if(a)state.addedDirectory=a;const f=await dbGet('fixedTemplesOverride');if(Array.isArray(f)&&f.length)state.fixedTemples=f}catch(e){console.warn(e)}if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});render()}
+async function init(){try{const w=await dbGet('workspace');if(w){state.records=Array.isArray(w.records)?w.records:[];state.draft=w.draft||null;state.baseName=w.baseName||state.baseName;state.sourceLoaded=!!w.sourceLoaded;state.deleted=Array.isArray(w.deleted)?w.deleted:[]}const a=await dbGet('addedDirectory');if(a)state.addedDirectory=a;const f=await dbGet('fixedTemplesOverride');if(Array.isArray(f)&&f.length)state.fixedTemples=f}catch(e){console.warn(e)}if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  try{
+    const reg=await navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'});
+    // GitHub Pagesを更新した直後でも新版確認を促す。
+    reg.update().catch(()=>{});
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      // 新Service Workerへ切り替わったら一度だけ再読込して新版UIへ移る。
+      if(sessionStorage.getItem('sw-reloaded-'+APP_VERSION)) return;
+      sessionStorage.setItem('sw-reloaded-'+APP_VERSION,'1');
+      location.reload();
+    });
+  }catch(_){}
+}
+render()}
 init();
 })();
