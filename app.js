@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.22';
+const APP_VERSION = '0.23';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -28,16 +28,21 @@ function ensureRules(){const d=defaultRules();state.rules={...d,...(state.rules|
 function allAssignments(){const fixed=[].concat(...Object.values(window.FUNERAL_ROLE_GROUPS||{}),'未案内');const used=state.records.map(r=>r.assignment).filter(Boolean);return [...new Set([...fixed,...used])]}
 function personRuleKey(p){return [p.templeNo||'',p.district||'',p.temple||'',p.name||''].map(norm).join('|')}
 function isFullReturnPerson(r){const key=personRuleKey(r);return ensureRules().fullReturnPeople.some(p=>personRuleKey(p)===key)}
+function templeReadingByPerson(p){
+  const all=[...state.fixedTemples,...state.addedDirectory.temples];
+  const t=all.find(x=>(p.templeNo&&String(x['寺籍番号']||'')===String(p.templeNo))||(!p.templeNo&&x['寺院名']===p.temple&&x['教区']===p.district));
+  return t?.['フリガナ']||'';
+}
 function rulePeople(){
   const out=[];
   for(const t of [...state.fixedTemples,...state.addedDirectory.temples]){
-    for(const col of PERSON_COLS){const name=String(t[col]||'').trim();if(name)out.push({templeNo:String(t['寺籍番号']||''),district:t['教区']||'',temple:t['寺院名']||'',role:roleFromCol(col),name})}
+    for(const col of PERSON_COLS){const name=String(t[col]||'').trim();if(name)out.push({templeNo:String(t['寺籍番号']||''),district:t['教区']||'',temple:t['寺院名']||'',templeReading:t['フリガナ']||'',role:roleFromCol(col),name})}
   }
-  for(const p of state.addedDirectory.people||[])out.push({templeNo:String(p.templeNo||''),district:p.district||'',temple:p.temple||'',role:p.role||'',name:p.name||''});
-  for(const r of state.records)if(r.name)out.push({templeNo:r.templeNo||'',district:r.district||'',temple:r.temple||'',role:r.role||'',name:r.name||''});
+  for(const p of state.addedDirectory.people||[])out.push({templeNo:String(p.templeNo||''),district:p.district||'',temple:p.temple||'',templeReading:templeReadingByPerson(p),role:p.role||'',name:p.name||''});
+  for(const r of state.records)if(r.name)out.push({templeNo:r.templeNo||'',district:r.district||'',temple:r.temple||'',templeReading:templeReadingForRecord(r),role:r.role||'',name:r.name||''});
   const seen=new Set();return out.filter(p=>{const k=personRuleKey(p);if(!p.name||seen.has(k))return false;seen.add(k);return true})
 }
-function rulePeopleMatches(q){const n=norm(q);if(!n)return[];return rulePeople().filter(p=>[p.name,p.temple,p.role,p.district].map(norm).some(v=>v.startsWith(n))).slice(0,40)}
+function rulePeopleMatches(q){const n=norm(q);if(!n)return[];return rulePeople().filter(p=>[p.name,p.temple,p.templeReading,p.role,p.district].map(norm).some(v=>v.startsWith(n))).slice(0,40)}
 function blankRecord(kind='本人', parent=null){return {no:null,id: kind==='本人'?nextParentId():nextChildId(parent?.id),parentId:parent?.id||'',kind,carrierId:parent?.id||'',office:'第1宗務所',district:'',templeNo:'',temple:'',role:'',name:'',assignment:'',note:'',money:blankMoney()}}
 function parentNum(id){const m=/^P(\d{3,})$/.exec(id||'');return m?Number(m[1]):0}
 function nextParentId(){let m=0;state.records.forEach(r=>{if(!r.parentId)m=Math.max(m,parentNum(r.id))});if(state.draft&&!state.draft.parentId)m=Math.max(m,parentNum(state.draft.id));return 'P'+String(m+1).padStart(3,'0')}
@@ -168,7 +173,7 @@ function rulesView(){
   <div class="card"><h3>回心ルール</h3><div class="muted">密葬回心・本葬回心の両方に適用します。全返し ＞ 回心なし教区 ＞ 通常回心 の順で優先します。</div>
     <div class="rule-block"><label>通常回心：香資としていただく上限（ライン）</label><div class="row"><input id="kaishinLine" class="field rule-money" inputmode="numeric" type="number" min="0" step="1000" value="${rules.kaishinLine??''}" placeholder="例：10000"><span>円</span></div><div class="muted">例：10,000円に設定し、20,000円の香資を受けた場合は回心10,000円。</div></div>
     <div class="rule-block"><label>回心なし教区</label><div class="chips">${[1,2,3,4,5,6,7,8].map(n=>{const d=`第${n}教区`;return `<label class="rule-check"><input type="checkbox" data-no-return="${d}" ${rules.noReturnDistricts.includes(d)?'checked':''}> ${d}</label>`}).join('')}</div><div class="muted">選択した教区は香資を全額いただき、回心は0円になります。未選択の教区には通常回心ルールを適用します。</div></div>
-    <div class="rule-block"><label>回心（全返し）対象者</label><input id="fullReturnSearch" class="field" value="${esc(q)}" placeholder="寺号・氏名・役職から検索"><div id="fullReturnResults">${fullReturnResultsMarkup(matches)}</div><div class="rule-selected">${rules.fullReturnPeople.map((p,i)=>`<div class="rule-person"><div><strong>${esc(p.temple)}　${esc(p.name)}</strong><div class="muted">${esc([p.district,p.role].filter(Boolean).join(' / '))}</div></div><button class="btn small danger" data-remove-full="${i}">削除</button></div>`).join('')||'<div class="muted">全返し対象者は未設定です。</div>'}</div></div>
+    <div class="rule-block"><label>回心（全返し）対象者</label><input id="fullReturnSearch" class="field" value="${esc(q)}" placeholder="寺号・寺号よみ・氏名・役職から検索"><div id="fullReturnResults">${fullReturnResultsMarkup(matches)}</div><div class="rule-selected">${rules.fullReturnPeople.map((p,i)=>`<div class="rule-person"><div><strong>${esc(p.temple)}　${esc(p.name)}</strong><div class="muted">${esc([p.district,p.role].filter(Boolean).join(' / '))}</div></div><button class="btn small danger" data-remove-full="${i}">削除</button></div>`).join('')||'<div class="muted">全返し対象者は未設定です。</div>'}</div></div>
   </div>
   <div class="card"><h3>本葬謝誼ルール</h3><div class="muted">配役と金額を紐付けます。受付フォームでは通常どおり個別修正も可能です。</div>
     <div class="rule-block"><label>一律金額を全配役にセット</label><div class="row"><input id="honorariumAll" class="field rule-money" inputmode="numeric" type="number" min="0" step="1000" placeholder="例：30000"><span>円</span><button class="btn" id="setHonorariumAll">全配役にセット</button></div></div>
