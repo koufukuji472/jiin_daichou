@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.28';
+const APP_VERSION = '0.29';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -30,7 +30,29 @@ function defaultCashControl(){
   const blocks={};Object.entries(defs).forEach(([id,d])=>blocks[id]={id,name:d.name,items:[...d.items],allocated:null,actualRemaining:null,closed:null});
   const incomeActual={};INCOME.forEach(k=>incomeActual[k]=null);return {totalInitial:null,blocks,incomeActual};
 }
-function ensureCashControl(){const d=defaultCashControl(),c=state.cashControl||{};state.cashControl={...d,...c,blocks:{},incomeActual:{...d.incomeActual,...(c.incomeActual||{})}};for(const id of ['A','B','C','D','E']){const old=c.blocks?.[id]||{};state.cashControl.blocks[id]={...d.blocks[id],...old,items:Array.isArray(old.items)?old.items:[...d.blocks[id].items]}}const assigned=new Set();for(const id of ['A','B','C','D','E'])state.cashControl.blocks[id].items=state.cashControl.blocks[id].items.filter(x=>EXPENSE.includes(x)&&!assigned.has(x)&&(assigned.add(x)||true));EXPENSE.forEach(item=>{if(!assigned.has(item))state.cashControl.blocks.E.items.push(item)});return state.cashControl}
+function ensureCashControl(){
+  const d=defaultCashControl();
+  if(!state.cashControl||typeof state.cashControl!=='object')state.cashControl=defaultCashControl();
+  const c=state.cashControl;
+  if(!Object.prototype.hasOwnProperty.call(c,'totalInitial'))c.totalInitial=null;
+  if(!c.blocks||typeof c.blocks!=='object')c.blocks={};
+  if(!c.incomeActual||typeof c.incomeActual!=='object')c.incomeActual={};
+  for(const item of INCOME)if(!Object.prototype.hasOwnProperty.call(c.incomeActual,item))c.incomeActual[item]=null;
+  for(const id of ['A','B','C','D','E']){
+    let b=c.blocks[id];
+    if(!b||typeof b!=='object'){b={...d.blocks[id],items:[...d.blocks[id].items]};c.blocks[id]=b}
+    if(!b.id)b.id=id;
+    if(!b.name)b.name=d.blocks[id].name;
+    if(!Array.isArray(b.items))b.items=[...d.blocks[id].items];
+    if(!Object.prototype.hasOwnProperty.call(b,'allocated'))b.allocated=null;
+    if(!Object.prototype.hasOwnProperty.call(b,'actualRemaining'))b.actualRemaining=null;
+    if(!Object.prototype.hasOwnProperty.call(b,'closed'))b.closed=null;
+  }
+  const assigned=new Set();
+  for(const id of ['A','B','C','D','E'])c.blocks[id].items=c.blocks[id].items.filter(x=>EXPENSE.includes(x)&&!assigned.has(x)&&(assigned.add(x)||true));
+  EXPENSE.forEach(item=>{if(!assigned.has(item)){c.blocks.E.items.push(item);assigned.add(item)}});
+  return c;
+}
 function expenseBlockForItem(item){const c=ensureCashControl();return ['A','B','C','D','E'].find(id=>c.blocks[id].items.includes(item))||'E'}
 function expenseLedgerForBlock(id){const b=ensureCashControl().blocks[id];return state.records.reduce((sum,r)=>sum+b.items.reduce((a,k)=>a+(r.money[k]===null?0:Number(r.money[k])||0),0),0)}
 function cashBlockCalc(id){const b=ensureCashControl().blocks[id],allocated=b.allocated===null?null:Number(b.allocated)||0,ledger=expenseLedgerForBlock(id),theoretical=allocated===null?null:allocated-ledger,actual=b.actualRemaining===null?null:Number(b.actualRemaining)||0,diff=(theoretical===null||actual===null)?null:actual-theoretical;return {allocated,ledger,theoretical,actual,diff}}
