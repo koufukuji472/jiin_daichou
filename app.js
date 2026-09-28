@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.29';
+const APP_VERSION = '0.30';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -14,7 +14,7 @@ function fullColWidth(h){return FULL_COL_WIDTH[h]||([...INCOME,...EXPENSE].inclu
 function fullColStyle(h){const w=fullColWidth(h);return `width:${w}px;min-width:${w}px;max-width:${w}px`}
 const ROLE_BUTTONS=['住職','東堂','副住職','徒弟','寺族','御山内'];
 const PERSON_COLS=['住職','東堂','副住職','徒弟','御山内','寺族1','寺族2'];
-const state={screen:'home',records:[],draft:null,editId:null,mode:'income',baseName:'本葬受付台帳',sourceLoaded:false,addedDirectory:{temples:[],people:[]},deleted:[],fixedTemples:window.FIXED_TEMPLES||[],search:'',filters:{district:'',kind:'',guide:'',columns:{}},returnScreen:null,tableView:'normal',tableScroll:{top:0,left:0},searchScrollY:0,rules:null,rulePersonSearch:'',cashControl:null};
+const state={screen:'home',records:[],draft:null,editId:null,mode:'income',baseName:'本葬受付台帳',sourceLoaded:false,addedDirectory:{temples:[],people:[]},deleted:[],fixedTemples:window.FIXED_TEMPLES||[],search:'',filters:{district:'',kind:'',guide:'',columns:{}},returnScreen:null,tableView:'normal',tableScroll:{top:0,left:0},searchScrollY:0,rules:null,rulePersonSearch:'',cashControl:null,editNav:{source:null,ids:[]},basicInfoExpanded:false};
 let moneyTarget=null, moneyValue=null, saveTimer=null;
 
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
@@ -167,9 +167,9 @@ function autoSave(){clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{await
 function toast(msg){let t=$('.toast');if(t)t.remove();t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.append(t);setTimeout(()=>t.remove(),2200)}
 function top(title, sub=''){return `<div class="topbar"><button class="btn small ghost" id="homeBtn" style="color:#fff;border-color:#698096">⌂</button><h1>${esc(title)}</h1><div class="small">v${APP_VERSION}${sub?` ・ ${esc(sub)}`:''}</div></div>`}
 function shell(x){return `<div class="shell">${x}</div>`}
-function navHome(){state.screen='home';state.editId=null;state.draft=null;state.returnScreen=null;render();autoSave()}
+function navHome(){state.screen='home';state.editId=null;state.draft=null;state.returnScreen=null;state.editNav={source:null,ids:[]};state.basicInfoExpanded=false;render();autoSave()}
 function formBackMarkup(){if(!state.returnScreen)return '';const label=state.returnScreen==='table'?'← 表一覧へ戻る':state.returnScreen==='search'?'← 検索結果へ戻る':'← トップへ戻る';return `<div style="margin-bottom:10px"><button class="btn small" id="backToSource">${label}</button></div>`}
-function backToSource(){const dest=state.returnScreen||'home';state.draft=null;state.editId=null;state.returnScreen=null;state.screen=dest;render();autoSave()}
+function backToSource(){const dest=state.returnScreen||'home';state.draft=null;state.editId=null;state.returnScreen=null;state.editNav={source:null,ids:[]};state.basicInfoExpanded=false;state.screen=dest;render();autoSave()}
 function bindHome(){const b=$('#homeBtn');if(b)b.onclick=()=>navHome()}
 
 function render(){
@@ -201,22 +201,39 @@ function bindTempleSuggestionButtons(){const r=state.draft;$$('[data-temple-no]'
 function updateTempleSuggestions(){const r=state.draft,box=$('#templeSuggestions');if(!r||!box)return;const {candidates,html}=templeSuggestionsMarkup(r,r._templeQuery??r.temple);box.innerHTML=html;box.classList.toggle('hidden',!candidates.length);bindTempleSuggestionButtons()}
 function peopleForTemple(r){let out=[];const all=[...state.fixedTemples,...state.addedDirectory.temples];const t=all.find(x=>(r.templeNo&&x['寺籍番号']===r.templeNo)||(!r.templeNo&&x['寺院名']===r.temple&&x['教区']===r.district));if(t)PERSON_COLS.forEach(c=>{if(t[c])out.push({role:roleFromCol(c),name:t[c]})});state.addedDirectory.people.filter(p=>(r.templeNo&&p.templeNo===r.templeNo)||(!r.templeNo&&p.temple===r.temple&&p.district===r.district)).forEach(p=>out.push({role:p.role,name:p.name}));const seen=new Set();return out.filter(p=>{const k=norm(p.role+'|'+p.name);if(seen.has(k))return false;seen.add(k);return true})}
 
-function formView(){const r=state.draft; if(!r)return '<div class="card error">入力データがありません。</div>';
-const candidates=templeCandidates(r,r._templeQuery??r.temple);const people=peopleForTemple(r);
-return `${formBackMarkup()}${state.editId?`<div class="edit-banner">編集モード：既存データを読み込んでいます</div>`:''}${r.kind==='預かり'?`<div class="parent-banner">預かり入力　持参者：${esc((state.records.find(x=>x.id===r.parentId)||{}).name||r.carrierId)}</div>`:''}${personHeader(r)}
-${state.editId&&r.kind==='本人'?`<div class="card"><button class="btn wide" id="addDepositTop">＋ 預かりを追加</button></div>`:''}
-${r.kind==='預かり'?(()=>{const p=state.records.find(x=>x.id===r.parentId);return p?.temple?`<div class="card parent-temple-suggest"><div class="muted" style="margin-bottom:7px">親と同じ寺号を使う場合</div><button class="btn wide" id="useParentTemple">${esc(p.temple)} を使う</button></div>`:''})():''}
-<div class="card"><div class="section-title">① 教区</div>${districtButtons(r)}
+function currentEditNav(){
+  if(!state.editId)return {ids:[],index:-1};
+  const ids=Array.isArray(state.editNav?.ids)?state.editNav.ids:[];
+  return {ids,index:ids.indexOf(state.editId)};
+}
+function editNavMarkup(){
+  if(!state.editId)return '';
+  const {ids,index}=currentEditNav();
+  if(index<0||!ids.length)return '';
+  return `<div class="card edit-nav"><div class="row"><button class="btn" id="editPrev" ${index<=0?'disabled':''}>← 前へ</button><div class="grow" style="text-align:center"><strong>${index+1} / ${ids.length}件</strong><div class="muted">${esc(state.returnScreen==='search'?'検索結果':'表一覧')}の順番</div></div><button class="btn" id="editNext" ${index>=ids.length-1?'disabled':''}>次へ →</button></div></div>`;
+}
+function compactBasicInfo(r){
+  return `<div class="card compact-basic"><div class="row"><div class="grow"><div class="compact-grid"><div><span class="muted">寺号</span><strong>${esc(r.temple||'未入力')}</strong></div><div><span class="muted">役職</span><strong>${esc(r.role||'未入力')}</strong></div><div><span class="muted">氏名</span><strong>${esc(r.name||'未入力')}</strong></div><div><span class="muted">配役</span><strong>${esc(r.assignment||'未入力')}</strong></div></div></div></div><button class="btn wide" id="toggleBasicInfo" style="margin-top:12px">基本情報を編集</button></div>`;
+}
+function fullBasicInfo(r,candidates,people){
+  return `<div class="card"><div class="section-title">① 教区</div>${districtButtons(r)}
 <div class="section-title">② 寺号</div><input id="templeSearch" class="field field-lg" placeholder="漢字・ひらがな・カタカナ" value="${esc(r._templeQuery??r.temple)}"><div id="templeSuggestions" class="suggestions ${candidates.length?'':'hidden'}">${candidates.map(t=>`<button class="suggestion" data-temple-no="${esc(t['寺籍番号'])}"><span><strong>${esc(t['寺院名'])}</strong><br><span class="sub">${esc(t['教区'])} / ${esc(t['フリガナ'])}</span></span><span class="sub">${esc(t['寺籍番号'])}</span></button>`).join('')}</div><button class="btn small" id="useManualTemple" style="margin-top:8px">この寺号をそのまま使用</button>
 <div class="section-title">③ 役職</div>${roleButtons(r)}<div style="margin-top:8px"><input id="roleManual" class="field" placeholder="役職を手入力" value="${ROLE_BUTTONS.includes(r.role)?'':esc(r.role)}"></div>
 ${people.length?`<div class="section-title">名簿登録人物</div><div class="grid2">${people.map((p,i)=>`<button class="btn" data-person-index="${i}">${esc(p.role)}　${esc(p.name)}</button>`).join('')}</div>`:''}
 <div class="section-title">④ 氏名 <span style="color:#b42318">※必須</span></div><input id="nameField" class="field field-lg" value="${esc(r.name)}" placeholder="例：山田 太郎">
 <div id="candidateAction" class="hidden notice" style="margin-top:10px"><div style="font-weight:800;margin-bottom:8px">名簿候補にない入力です</div><div class="row"><button class="btn small" id="addCandidate">今後の候補に追加</button><button class="btn small" id="onceCandidate">今回だけ使用</button></div></div>
 <div class="section-title">⑤ 配役</div>${roleSelect(r)}<input id="assignmentManual" class="field ${r.assignment&&![].concat(...Object.values(window.FUNERAL_ROLE_GROUPS||{}),'未案内').includes(r.assignment)?'':'hidden'}" style="margin-top:8px" placeholder="例：尊宿兼先導師" value="${esc(r.assignment)}">
-<div class="section-title">備考</div><textarea id="noteField" class="field" rows="2">${esc(r.note)}</textarea></div>
+<div class="section-title">備考</div><textarea id="noteField" class="field" rows="2">${esc(r.note)}</textarea>${state.editId?'<button class="btn wide" id="toggleBasicInfo" style="margin-top:12px">基本情報を閉じる</button>':''}</div>`;
+}
+function formView(){const r=state.draft; if(!r)return '<div class="card error">入力データがありません。</div>';
+const candidates=templeCandidates(r,r._templeQuery??r.temple);const people=peopleForTemple(r);
+const basic=state.editId&&!state.basicInfoExpanded?compactBasicInfo(r):fullBasicInfo(r,candidates,people);
+return `${formBackMarkup()}${editNavMarkup()}${state.editId?`<div class="edit-banner">編集モード：既存データを読み込んでいます</div>`:''}${r.kind==='預かり'?`<div class="parent-banner">預かり入力　持参者：${esc((state.records.find(x=>x.id===r.parentId)||{}).name||r.carrierId)}</div>`:''}${personHeader(r)}
+${state.editId&&r.kind==='本人'?`<div class="card"><button class="btn wide" id="addDepositTop">＋ 預かりを追加</button></div>`:''}
+${r.kind==='預かり'?(()=>{const p=state.records.find(x=>x.id===r.parentId);return p?.temple?`<div class="card parent-temple-suggest"><div class="muted" style="margin-bottom:7px">親と同じ寺号を使う場合</div><button class="btn wide" id="useParentTemple">${esc(p.temple)} を使う</button></div>`:''})():''}
+${basic}
 ${moneyPanel(r)}
-<div class="card"><div class="grid2">${r.kind==='本人'&&!state.editId?'<button class="btn" id="addDeposit">＋ 預かりを追加</button>':''}<button class="btn primary" id="commitRecord">${state.editId?'更新':'登録'}</button></div>${state.editId?'<button class="btn danger wide" id="deleteRecord" style="margin-top:10px">削除</button>':''}</div>`}
-
+<div class="card"><div class="grid2">${r.kind==='本人'&&!state.editId?'<button class="btn" id="addDeposit">＋ 預かりを追加</button>':''}<button class="btn primary" id="commitRecord">${state.editId?'更新':'登録'}</button></div>${state.editId?`${currentEditNav().index>=0&&currentEditNav().index<currentEditNav().ids.length-1?'<button class="btn wide" id="commitNext" style="margin-top:10px">更新して次へ →</button>':''}<button class="btn danger wide" id="deleteRecord" style="margin-top:10px">削除</button>`:''}</div>`}
 function moneyPanel(r){const isI=state.mode==='income';
 if(isI){
   const groups=[['密葬',['密葬香資','密葬供花','密葬供物']],['本葬',['本葬香資','本葬供花料','本葬供物料']]];
@@ -326,6 +343,8 @@ function bindCurrent(){
 
 function bindForm(){const r=state.draft;
 const back=$('#backToSource');if(back)back.onclick=backToSource;
+const toggle=$('#toggleBasicInfo');if(toggle)toggle.onclick=()=>{state.basicInfoExpanded=!state.basicInfoExpanded;render();scrollPageTop()};
+const prev=$('#editPrev');if(prev)prev.onclick=()=>navigateEdit(-1);const next=$('#editNext');if(next)next.onclick=()=>navigateEdit(1);const commitNext=$('#commitNext');if(commitNext)commitNext.onclick=()=>navigateEdit(1);
 const upt=$('#useParentTemple');if(upt)upt.onclick=()=>{const p=state.records.find(x=>x.id===r.parentId);if(!p)return;r.office=p.office||'第1宗務所';r.district=p.district||'';r.templeNo=p.templeNo||'';r.temple=p.temple||'';r._templeQuery=r.temple;applyRuleDefaultsToRecord(r,{honorarium:false,kaishin:true});autoSave();render();toast(`${r.temple} を引き継ぎました`)};
 $$('[data-district]').forEach(b=>b.onclick=()=>{r.district=b.dataset.district;r.temple='';r.templeNo='';r._templeQuery='';applyRuleDefaultsToRecord(r,{honorarium:false,kaishin:true});autoSave();render()});
 const ts=$('#templeSearch');if(ts){ts.oninput=()=>{r._templeQuery=ts.value;r.temple=ts.value;r.templeNo='';autoSave();updateTempleSuggestions()}}
@@ -440,8 +459,27 @@ function makeOfferingPdf(r,canvas){
 function offeringPdfName(r){const d=offeringLabelData(r);const who=d.role==='住職'?d.temple:d.name;return safeName(`御供札_${who||'札'}`)+'.pdf'}
 
 function openMoney(key){moneyTarget=key;moneyValue=state.draft.money[key]===null?0:Number(state.draft.money[key])||0;const back=document.createElement('div');back.className='modal-backdrop';back.innerHTML=`<div class="modal"><h3>${esc(key)}</h3><div class="big-amount" id="moneyDisplay">${fmt(moneyValue)} 円</div><div class="quick-grid">${[10000,20000,30000,50000,100000].map(n=>`<button class="btn" data-quick="${n}">${fmt(n)}</button>`).join('')}</div><div class="section-title">手動入力</div><input id="moneyManual" class="field field-lg" inputmode="numeric" placeholder="金額を直接入力"><div class="grid3" style="margin-top:12px"><button class="btn" id="moneyClear">クリア</button><button class="btn" id="moneyCancel">キャンセル</button><button class="btn primary" id="moneyOk">決定</button></div></div>`;document.body.append(back);const disp=()=>$('#moneyDisplay',back).textContent=fmt(moneyValue)+' 円';$$('[data-quick]',back).forEach(b=>b.onclick=()=>{moneyValue+=Number(b.dataset.quick);disp()});$('#moneyManual',back).oninput=e=>{const v=e.target.value.replace(/[^0-9]/g,'');if(v!==''){moneyValue=Number(v);disp()}};$('#moneyClear',back).onclick=()=>{moneyValue=0;disp();$('#moneyManual',back).value=''};$('#moneyCancel',back).onclick=()=>back.remove();$('#moneyOk',back).onclick=()=>{const r=state.draft;setMoneyWithSource(r,moneyTarget,moneyValue===0?0:moneyValue,isRuleControlledMoneyKey(moneyTarget)?'manual':null);if(moneyTarget==='密葬香資')applyRuleDefaultsToRecord(r,{honorarium:false,kaishin:true});if(moneyTarget==='本葬香資')applyRuleDefaultsToRecord(r,{honorarium:false,kaishin:true});back.remove();autoSave();render()};}
-function commitRecord(goHome=true,renderAfter=true){const r=state.draft;if(!r||!r.name.trim()){toast('氏名は必須です');return false}applyRuleDefaultsToRecord(r);syncGuidedExpenseColumns(r);delete r._templeQuery;const destination=state.returnScreen||'home';if(state.editId){const i=state.records.findIndex(x=>x.id===state.editId);if(i<0){toast('更新対象が見つかりません');return false}state.records[i]=JSON.parse(JSON.stringify(r));toast('更新しました')}else{if(state.records.some(x=>x.id===r.id)){toast('IDが重複しています');return false}state.records.push(JSON.parse(JSON.stringify(r)));toast('登録しました')}state.editId=null;state.draft=null;if(goHome){state.screen=destination;state.returnScreen=null}autoSave();if(renderAfter)render();return true}
-function deleteRecord(){const r=state.draft;const destination=state.returnScreen||'home';const children=state.records.filter(x=>x.parentId===r.id);let msg=`${r.id} ${r.name} を削除しますか？`;if(children.length)msg+=`\n\n預かり ${children.length}件も一緒に削除されます。`;if(!confirm(msg))return;const ids=new Set([r.id,...children.map(x=>x.id)]);state.records=state.records.filter(x=>{if(ids.has(x.id)){state.deleted.unshift({record:JSON.parse(JSON.stringify(x)),deletedAt:new Date().toISOString()});return false}return true});state.draft=null;state.editId=null;state.screen=destination;state.returnScreen=null;autoSave();render();toast('削除しました')}
+function saveCurrentDraft(quiet=false){
+  const r=state.draft;if(!r||!r.name.trim()){toast('氏名は必須です');return false}
+  applyRuleDefaultsToRecord(r);syncGuidedExpenseColumns(r);delete r._templeQuery;
+  if(state.editId){
+    const i=state.records.findIndex(x=>x.id===state.editId);if(i<0){toast('更新対象が見つかりません');return false}
+    state.records[i]=JSON.parse(JSON.stringify(r));if(!quiet)toast('更新しました');return true;
+  }
+  if(state.records.some(x=>x.id===r.id)){toast('IDが重複しています');return false}
+  state.records.push(JSON.parse(JSON.stringify(r)));if(!quiet)toast('登録しました');return true;
+}
+function commitRecord(goHome=true,renderAfter=true){
+  const destination=state.returnScreen||'home';if(!saveCurrentDraft(false))return false;
+  state.editId=null;state.draft=null;state.editNav={source:null,ids:[]};state.basicInfoExpanded=false;
+  if(goHome){state.screen=destination;state.returnScreen=null}autoSave();if(renderAfter)render();return true
+}
+function navigateEdit(delta){
+  if(!state.editId)return;const {ids,index}=currentEditNav();const targetIndex=index+delta;if(index<0||targetIndex<0||targetIndex>=ids.length)return;
+  if(!saveCurrentDraft(true))return;const target=state.records.find(x=>x.id===ids[targetIndex]);if(!target){toast('移動先が見つかりません');return}
+  state.draft=JSON.parse(JSON.stringify(target));state.editId=target.id;state.basicInfoExpanded=false;state.mode='income';autoSave();render();scrollPageTop();toast('更新して移動しました');
+}
+function deleteRecord(){const r=state.draft;const destination=state.returnScreen||'home';const children=state.records.filter(x=>x.parentId===r.id);let msg=`${r.id} ${r.name} を削除しますか？`;if(children.length)msg+=`\n\n預かり ${children.length}件も一緒に削除されます。`;if(!confirm(msg))return;const ids=new Set([r.id,...children.map(x=>x.id)]);state.records=state.records.filter(x=>{if(ids.has(x.id)){state.deleted.unshift({record:JSON.parse(JSON.stringify(x)),deletedAt:new Date().toISOString()});return false}return true});state.draft=null;state.editId=null;state.editNav={source:null,ids:[]};state.basicInfoExpanded=false;state.screen=destination;state.returnScreen=null;autoSave();render();toast('削除しました')}
 
 function snapshotTableScroll(){const w=$('#tableWrap');if(w)state.tableScroll={top:w.scrollTop,left:w.scrollLeft}}
 function bindSearchEditButtons(root=document){$$('[data-edit]',root).forEach(b=>b.onclick=()=>editRecord(b.dataset.edit,state.screen))}
@@ -449,7 +487,12 @@ function bindSearch(){const f=$('#recordSearch');if(f)f.oninput=()=>{state.searc
 function refreshTableResults(){snapshotTableScroll();const box=$('#tableResults');if(box){box.innerHTML=tableMarkup(filteredRecords());bindSearchEditButtons(box);$$('[data-column-filter]',box).forEach(h=>h.onclick=e=>{e.stopPropagation();openColumnFilter(h.dataset.columnFilter)});restoreTableScroll()}}
 function restoreTableScroll(){const w=$('#tableWrap');if(w){w.scrollTop=state.tableScroll?.top||0;w.scrollLeft=state.tableScroll?.left||0}}
 function bindTable(){const or=$('#openRules');if(or)or.onclick=()=>{state.screen='rules';render();autoSave()};const cf=$('#clearColumnFilters');if(cf)cf.onclick=()=>{state.filters.columns={};state.tableScroll={top:0,left:0};render();autoSave()};$$('[data-column-filter]').forEach(h=>h.onclick=e=>{e.stopPropagation();openColumnFilter(h.dataset.columnFilter)});const s=$('#tableSearch');if(s)s.oninput=()=>{state.search=s.value;state.tableScroll={top:0,left:0};refreshTableResults()};const d=$('#tableDistrict');if(d)d.onchange=()=>{state.filters.district=d.value;state.tableScroll={top:0,left:0};refreshTableResults();autoSave()};const k=$('#tableKind');if(k)k.onchange=()=>{state.filters.kind=k.value;state.tableScroll={top:0,left:0};refreshTableResults();autoSave()};const g=$('#tableGuide');if(g)g.onchange=()=>{state.filters.guide=g.value;state.tableScroll={top:0,left:0};refreshTableResults();autoSave()};$$('[data-table-view]').forEach(b=>b.onclick=()=>{snapshotTableScroll();state.tableView=b.dataset.tableView;render()});const w=$('#tableWrap');if(w)w.onscroll=()=>{state.tableScroll={top:w.scrollTop,left:w.scrollLeft}};bindSearchEditButtons();setTimeout(restoreTableScroll,0)}
-function editRecord(id,source=state.screen){const r=state.records.find(x=>x.id===id);if(!r)return;if(source==='table')snapshotTableScroll();if(source==='search')state.searchScrollY=window.scrollY;state.draft=JSON.parse(JSON.stringify(r));state.editId=id;state.mode='income';state.returnScreen=source;state.screen='form';render();scrollPageTop();autoSave()}
+function editRecord(id,source=state.screen){
+  const r=state.records.find(x=>x.id===id);if(!r)return;
+  if(source==='table')snapshotTableScroll();if(source==='search')state.searchScrollY=window.scrollY;
+  const ids=source==='table'?filteredRecords().map(x=>x.id):source==='search'?state.records.filter(x=>recordMatchesPrefix(x,state.search)).map(x=>x.id):[id];
+  state.editNav={source,ids};state.basicInfoExpanded=false;state.draft=JSON.parse(JSON.stringify(r));state.editId=id;state.mode='income';state.returnScreen=source;state.screen='form';render();scrollPageTop();autoSave()
+}
 
 function bindSettings(){const b=$('#backupDir');if(b)b.onclick=backupDirectory;const r=$('#restoreDir'),rf=$('#dirFile');if(r&&rf){r.onclick=()=>rf.click();rf.onchange=e=>restoreDirectory(e.target.files[0])}const rd=$('#reloadDirectory'),df=$('#directoryExcel');if(rd&&df){rd.onclick=()=>df.click();df.onchange=e=>reloadFixedDirectory(e.target.files[0])}const cw=$('#clearWorkspace');if(cw)cw.onclick=()=>{if(confirm('現在の入力データ・下書き・削除履歴を全て消去しますか？')){state.records=[];state.draft=null;state.deleted=[];state.sourceLoaded=false;state.baseName='本葬受付台帳';state.rules=defaultRules();state.cashControl=defaultCashControl();state.filters={district:'',kind:'',guide:'',columns:{}};autoSave();render();toast('作業データを消去しました')}}}
 function bindDeleted(){$$('[data-restore]').forEach(b=>b.onclick=()=>{const i=Number(b.dataset.restore);const d=state.deleted[i];if(!d)return;if(state.records.some(r=>r.id===d.record.id)){toast('同じIDが存在するため復元できません');return}state.records.push(d.record);state.deleted.splice(i,1);autoSave();render();toast('復元しました')})}
