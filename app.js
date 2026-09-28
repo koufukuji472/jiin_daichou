@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.30';
+const APP_VERSION = '0.31';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -213,7 +213,7 @@ function editNavMarkup(){
   return `<div class="card edit-nav"><div class="row"><button class="btn" id="editPrev" ${index<=0?'disabled':''}>← 前へ</button><div class="grow" style="text-align:center"><strong>${index+1} / ${ids.length}件</strong><div class="muted">${esc(state.returnScreen==='search'?'検索結果':'表一覧')}の順番</div></div><button class="btn" id="editNext" ${index>=ids.length-1?'disabled':''}>次へ →</button></div></div>`;
 }
 function compactBasicInfo(r){
-  return `<div class="card compact-basic"><div class="row"><div class="grow"><div class="compact-grid"><div><span class="muted">寺号</span><strong>${esc(r.temple||'未入力')}</strong></div><div><span class="muted">役職</span><strong>${esc(r.role||'未入力')}</strong></div><div><span class="muted">氏名</span><strong>${esc(r.name||'未入力')}</strong></div><div><span class="muted">配役</span><strong>${esc(r.assignment||'未入力')}</strong></div></div></div></div><button class="btn wide" id="toggleBasicInfo" style="margin-top:12px">基本情報を編集</button></div>`;
+  return `<div class="card compact-basic"><button class="btn wide" id="toggleBasicInfo">基本情報を編集</button></div>`;
 }
 function fullBasicInfo(r,candidates,people){
   return `<div class="card"><div class="section-title">① 教区</div>${districtButtons(r)}
