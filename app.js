@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.31';
+const APP_VERSION = '0.32';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -230,7 +230,7 @@ const candidates=templeCandidates(r,r._templeQuery??r.temple);const people=peopl
 const basic=state.editId&&!state.basicInfoExpanded?compactBasicInfo(r):fullBasicInfo(r,candidates,people);
 return `${formBackMarkup()}${editNavMarkup()}${state.editId?`<div class="edit-banner">編集モード：既存データを読み込んでいます</div>`:''}${r.kind==='預かり'?`<div class="parent-banner">預かり入力　持参者：${esc((state.records.find(x=>x.id===r.parentId)||{}).name||r.carrierId)}</div>`:''}${personHeader(r)}
 ${state.editId&&r.kind==='本人'?`<div class="card"><button class="btn wide" id="addDepositTop">＋ 預かりを追加</button></div>`:''}
-${r.kind==='預かり'?(()=>{const p=state.records.find(x=>x.id===r.parentId);return p?.temple?`<div class="card parent-temple-suggest"><div class="muted" style="margin-bottom:7px">親と同じ寺号を使う場合</div><button class="btn wide" id="useParentTemple">${esc(p.temple)} を使う</button></div>`:''})():''}
+${r.kind==='預かり'&&!state.editId?(()=>{const p=state.records.find(x=>x.id===r.parentId);return p?.temple?`<div class="card parent-temple-suggest"><div class="muted" style="margin-bottom:7px">親と同じ寺号を使う場合</div><button class="btn wide" id="useParentTemple">${esc(p.temple)} を使う</button></div>`:''})():''}
 ${basic}
 ${moneyPanel(r)}
 <div class="card"><div class="grid2">${r.kind==='本人'&&!state.editId?'<button class="btn" id="addDeposit">＋ 預かりを追加</button>':''}<button class="btn primary" id="commitRecord">${state.editId?'更新':'登録'}</button></div>${state.editId?`${currentEditNav().index>=0&&currentEditNav().index<currentEditNav().ids.length-1?'<button class="btn wide" id="commitNext" style="margin-top:10px">更新して次へ →</button>':''}<button class="btn danger wide" id="deleteRecord" style="margin-top:10px">削除</button>`:''}</div>`}
