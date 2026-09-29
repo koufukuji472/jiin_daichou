@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.63';
+const APP_VERSION = '0.64';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -91,10 +91,10 @@ function setPostcardPaperMode(mode){const st=ensurePostcardSettings();st.layouts
 // 封筒は完成済みハガキの各サイズ比率を引き継ぐ。氏名・寺号役職はハガキ基準の130%、
 // 住所は一度130%にした状態から10%下げた117%相当を新しい0%基準にする。
 // 氏名列は用紙の縦中心線、住所列は郵便番号の下2桁付近をアンカーにする。
-function defaultEnvelopeLayout(){const p=defaultPostcardLayout(),b=1.3;return {...p,zipX:0,zipY:0,addressX:0,addressY:0,addressScale:Number((p.addressScale*b*.9).toFixed(3)),titleX:0,titleY:0,titleScale:Number((p.titleScale*b).toFixed(3)),nameX:0,nameY:0,nameScale:Number((p.nameScale*b).toFixed(3)),nameGap:p.nameGap,honorGap:p.honorGap,gyojiX:0,gyojiY:0}}
+function defaultEnvelopeLayout(){const p=defaultPostcardLayout(),b=1.3;return {...p,zipX:0,zipY:0,addressX:0,addressY:0,addressScale:Number((p.addressScale*b*.9).toFixed(3)),titleX:0,titleY:0,titleScale:Number((p.titleScale*b).toFixed(3)),nameX:0,nameY:0,nameScale:Number((p.nameScale*b).toFixed(3)),nameGap:p.nameGap,honorGap:p.honorGap,gyojiX:-9,gyojiY:0}}
 function cloneEnvelopeLayout(x=null){const d=defaultEnvelopeLayout(),v={...d,...(x||{})};v.zipDigitX=Array.isArray(v.zipDigitX)&&v.zipDigitX.length===7?[...v.zipDigitX]:[0,0,0,0,0,0,0];if(typeof v.nameGap!=='number')v.nameGap=d.nameGap;if(typeof v.honorGap!=='number')v.honorGap=d.honorGap;delete v.gyojiScale;return v}
-function defaultEnvelopeSettings(){const base=defaultEnvelopeLayout();return {layoutVersion:4,paperMode:'nag3',flapMm:25,customWidth:120,customHeight:235,layouts:{nag3:cloneEnvelopeLayout(base),flap:cloneEnvelopeLayout(base),custom:cloneEnvelopeLayout(base)},layout:cloneEnvelopeLayout(base)}}
-function ensureEnvelopeSettings(){const d=defaultEnvelopeSettings(),old=state.envelopeSettings||{},oldVersion=Number(old.layoutVersion)||0,layouts=old.layouts&&typeof old.layouts==='object'?old.layouts:{};state.envelopeSettings={...d,...old};state.envelopeSettings.paperMode=['nag3','flap','custom'].includes(state.envelopeSettings.paperMode)?state.envelopeSettings.paperMode:'nag3';state.envelopeSettings.flapMm=clamp(Number(state.envelopeSettings.flapMm)||25,0,80);state.envelopeSettings.customWidth=clamp(Number(state.envelopeSettings.customWidth)||120,60,300);state.envelopeSettings.customHeight=clamp(Number(state.envelopeSettings.customHeight)||235,100,500);if(oldVersion<4){state.envelopeSettings.layouts={nag3:cloneEnvelopeLayout(d.layouts.nag3),flap:cloneEnvelopeLayout(d.layouts.flap),custom:cloneEnvelopeLayout(d.layouts.custom)}}else{state.envelopeSettings.layouts={nag3:cloneEnvelopeLayout(layouts.nag3||old.layout||d.layout),flap:cloneEnvelopeLayout(layouts.flap||old.layout||d.layout),custom:cloneEnvelopeLayout(layouts.custom||old.layout||d.layout)}}state.envelopeSettings.layout=cloneEnvelopeLayout(state.envelopeSettings.layouts[state.envelopeSettings.paperMode]);state.envelopeSettings.layoutVersion=4;return state.envelopeSettings}
+function defaultEnvelopeSettings(){const base=defaultEnvelopeLayout();return {layoutVersion:5,paperMode:'nag3',flapMm:25,customWidth:120,customHeight:235,layouts:{nag3:cloneEnvelopeLayout(base),flap:cloneEnvelopeLayout(base),custom:cloneEnvelopeLayout(base)},layout:cloneEnvelopeLayout(base)}}
+function ensureEnvelopeSettings(){const d=defaultEnvelopeSettings(),old=state.envelopeSettings||{},oldVersion=Number(old.layoutVersion)||0,layouts=old.layouts&&typeof old.layouts==='object'?old.layouts:{};state.envelopeSettings={...d,...old};state.envelopeSettings.paperMode=['nag3','flap','custom'].includes(state.envelopeSettings.paperMode)?state.envelopeSettings.paperMode:'nag3';state.envelopeSettings.flapMm=clamp(Number(state.envelopeSettings.flapMm)||25,0,80);state.envelopeSettings.customWidth=clamp(Number(state.envelopeSettings.customWidth)||120,60,300);state.envelopeSettings.customHeight=clamp(Number(state.envelopeSettings.customHeight)||235,100,500);if(oldVersion<5){state.envelopeSettings.layouts={nag3:cloneEnvelopeLayout(d.layouts.nag3),flap:cloneEnvelopeLayout(d.layouts.flap),custom:cloneEnvelopeLayout(d.layouts.custom)}}else{state.envelopeSettings.layouts={nag3:cloneEnvelopeLayout(layouts.nag3||old.layout||d.layout),flap:cloneEnvelopeLayout(layouts.flap||old.layout||d.layout),custom:cloneEnvelopeLayout(layouts.custom||old.layout||d.layout)}}state.envelopeSettings.layout=cloneEnvelopeLayout(state.envelopeSettings.layouts[state.envelopeSettings.paperMode]);state.envelopeSettings.layoutVersion=5;return state.envelopeSettings}
 function envelopePaperSpec(settings=ensureEnvelopeSettings()){const mode=settings.paperMode;if(mode==='flap')return {mode,label:'長形3号＋フタ',width:120,height:235+clamp(Number(settings.flapMm)||25,0,80),flapMm:clamp(Number(settings.flapMm)||25,0,80)};if(mode==='custom')return {mode,label:'カスタム',width:clamp(Number(settings.customWidth)||120,60,300),height:clamp(Number(settings.customHeight)||235,100,500)};return {mode:'nag3',label:'長形3号',width:120,height:235}}
 function envelopePaperOrientation(spec=envelopePaperSpec()){return spec.width<=spec.height?'縦':'横'}
 function saveActiveEnvelopeLayout(layout){const st=ensureEnvelopeSettings(),v=cloneEnvelopeLayout(layout);st.layout=v;st.layouts[st.paperMode]=cloneEnvelopeLayout(v);return v}
@@ -677,7 +677,7 @@ function envelopeCanvas(data,layoutOverride=null,showGuides=false){const MM=8,pa
   const nameBaseX=centerX;
   const titleBaseX=nameBaseX+15; // v0.62より1mm外側へ。氏名との間隔を少し広げる。
   const addressBaseX=(zipCenters[5]+zipCenters[6])/2;
-  // ハガキでは氏名列と御侍史の差が6mm。封筒は氏名を130%にしたので横間隔も130%にして7.8mmを基準にする。
+  // ハガキ由来の7.8mm差に加え、実機確認で御侍史をさらに左へ9mm移動した位置を新しい0mm基準にする。
   const gyojiBaseX=nameBaseX-7.8;
   const ax=addressBaseX+(Number(L.addressX)||0),ay=bodyTop+30+(Number(L.addressY)||0),as=clamp(Number(L.addressScale)||1,.65,3);
   drawVerticalWrapped(ctx,data.address,mm(ax),mm(ay),mm(3.6)*as,mm(.38)*as,32,mm(5.2)*as,500);
