@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.46';
+const APP_VERSION = '0.47';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
