@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.53';
+const APP_VERSION = '0.54';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -255,6 +255,16 @@ function namePartsForUse(r,use){
   const line1=applyNameTemplate(effectiveNameTitle(cfg),r),line2=String(r.name||'').trim(),honorific1=effectiveHonorific(cfg),honorific2=(u.mode==='postal'&&cfg.gyoji)?'御侍史':'';
   const second=[line2,honorific1].filter(Boolean).join(' ');
   return {line1,line2,honorific1,honorific2,complete:[line1,second,honorific2].filter(Boolean).join('\n')};
+}
+// 印刷物共通の宛名解釈。印刷側で実データを補完せず、名前ルールの意味をそのまま使う。
+// 郵便/個人名: 寺号役職=表記1、氏名=表記2+敬称1。寺院名: 表記1全体が氏名。
+function printNameForUse(r,use){
+  const parts=namePartsForUse(r,use),mode=ensureNameRules().uses[use]?.mode||'postal';
+  if(mode==='temple')return {mode,titleRole:'',mainName:String(parts.line1||'').trim(),honorific2:String(parts.honorific2||'').trim(),parts};
+  const personal=[String(parts.line2||'').trim(),String(parts.honorific1||'').trim()].filter(Boolean).join(' ');
+  // 役職なし等で line2 が無い場合は line1 が完成した主宛名。勝手に record.name は補わない。
+  if(!personal)return {mode,titleRole:'',mainName:String(parts.line1||'').trim(),honorific2:String(parts.honorific2||'').trim(),parts};
+  return {mode,titleRole:String(parts.line1||'').trim(),mainName:personal,honorific2:String(parts.honorific2||'').trim(),parts};
 }
 function nameUseRows(use){return state.records.map((r,i)=>{ensureAddressFields(r);const p=namePartsForUse(r,use);return {'No.':i+1,'レコードID':r.id,'受付区分':r.kind,'教区':r.district||'','寺号':r.temple||'','郵便番号':r.postalCode||'','住所（数字）':r.addressNumeric||'','住所（漢数字）':r.addressKanji||'','役職':r.role||'','氏名':r.name||'','配役':r.assignment||'','表記1':p.line1,'表記2（氏名）':p.line2,'敬称1':p.honorific1,'敬称2':p.honorific2,'完成表記':p.complete}})}
 function nameRulesSettingsRows(){const rows=[['用途','モード','役職','寺号＋役職表記','氏名敬称1','御侍史','寺院名モード表記','寺号役職一括','敬称一括','御侍史一括','寺院名寺号','寺院名副住職以下','様一括']];const n=ensureNameRules();for(const use of NAME_USES){const u=n.uses[use];for(const role of NAME_RULE_ROLES){const c=u.roles[role];rows.push([use,NAME_MODE_LABELS[u.mode]||u.mode,role,effectiveNameTitle(c),effectiveHonorific(c),c.gyoji?'ON':'OFF',effectiveShortTemplate(c),u.titlePreset,u.honorificPreset,u.gyojiPreset,u.templeSuffixPreset,u.templeSubPreset,u.templeSamaPreset])}}return rows}
@@ -582,7 +592,7 @@ function receiptMoneyItems(r,mode){
   return items;
 }
 
-function selectedPostcardData(){let recs=[];if(state.postcardTargetMode==='全員')recs=[...state.records];else if(state.postcardTargetMode==='No.指定'){const nums=new Set(parseNoSpec(state.postcardNoRange));recs=state.records.filter(r=>nums.has(actualNo(r)))}else{const n=Math.max(1,Number(state.postcardSingleNo)||1);recs=state.records.filter(r=>actualNo(r)===n)}const mode=ensureNameRules().uses['ハガキ']?.mode||'postal';return recs.map(r=>{ensureAddressFields(r);return {record:r,no:actualNo(r),name:namePartsForUse(r,'ハガキ'),nameMode:mode,zip:postalDigits(r.postalCode),address:String(r.addressKanji||addressToKanji(r.addressNumeric)||'')}}).filter(x=>x.zip.length===7&&x.address&&(x.name.line1||x.name.line2||x.record.name))}
+function selectedPostcardData(){let recs=[];if(state.postcardTargetMode==='全員')recs=[...state.records];else if(state.postcardTargetMode==='No.指定'){const nums=new Set(parseNoSpec(state.postcardNoRange));recs=state.records.filter(r=>nums.has(actualNo(r)))}else{const n=Math.max(1,Number(state.postcardSingleNo)||1);recs=state.records.filter(r=>actualNo(r)===n)}return recs.map(r=>{ensureAddressFields(r);return {record:r,no:actualNo(r),printName:printNameForUse(r,'ハガキ'),zip:postalDigits(r.postalCode),address:String(r.addressKanji||addressToKanji(r.addressNumeric)||'')}}).filter(x=>x.zip.length===7&&x.address&&x.printName.mainName)}
 function verticalGlyph(ch){return /[-ー―−－]/.test(ch)?'｜':ch}
 const POSTCARD_FONT_FAMILY='HGSeikaishotaiPRO, HG正楷書体-PRO, HGRSKP, Hiragino Mincho ProN, Yu Mincho, YuMincho, serif';
 async function ensurePostcardFontLoaded(){try{if(document.fonts&&document.fonts.load)await document.fonts.load('16px HGSeikaishotaiPRO')}catch(e){console.warn('正楷書体を読み込めないため代替フォントを使用します',e)}}
@@ -596,20 +606,19 @@ function postcardCanvas(data,layoutOverride=null,showGuides=false){const MM=8,W=
   canvasFont(ctx,mm(5.0)*zs,600);ctx.textAlign='center';ctx.textBaseline='middle';digits.forEach((d,i)=>ctx.fillText(d,mm(zipCenters[i]+zipX+(Number(L.zipDigitX?.[i])||0)),mm(zipY)));
   // 住所：漢数字住所を右側から縦書き。長い住所は左へ折り返す。
   const ax=81+(Number(L.addressX)||0),ay=35+(Number(L.addressY)||0),as=clamp(Number(L.addressScale)||1,.65,1.5);drawVerticalWrapped(ctx,data.address,mm(ax),mm(ay),mm(3.6)*as,mm(.38)*as,24,mm(5.2)*as,500);
-  // 宛名は「名前ルール」のモードをそのまま尊重する。
-  // 郵便/個人名：中央=氏名+敬称1、右=寺号役職。寺院名：中央=寺院名モード表記、右列は出さない。
-  const np=data.name,mode=data.nameMode||'postal',nx=50+(Number(L.nameX)||0),ny=45+(Number(L.nameY)||0),ns=clamp(Number(L.nameScale)||1,.65,2.4);
-  const templeMode=mode==='temple';const main=String(templeMode?np.line1:(np.line2||(!np.line1?data.record.name:'')||''));const honor=String(templeMode?'':(np.honorific1||''));const title=String(templeMode?'':(np.line1||''));
-  const nameSize=mm(6.2)*ns;const nameGap=mm((.55+(Number(L.nameGap)||0)))*ns;const nameStep=nameSize+nameGap;const mainHeight=drawVerticalText(ctx,main,mm(nx),mm(ny),nameSize,nameGap,600,24);const honorY=mm(ny)+mainHeight+mm(2.0);if(honor)drawVerticalText(ctx,honor,mm(nx),honorY,nameSize,nameGap,600,8);
+  // 宛名は共通の印刷用解釈だけを見る。印刷側で氏名を補完・再分解しない。
+  const pn=data.printName,nx=50+(Number(L.nameX)||0),ny=45+(Number(L.nameY)||0),ns=clamp(Number(L.nameScale)||1,.65,2.4);
+  const main=String(pn.mainName||''),title=String(pn.titleRole||'');
+  const nameSize=mm(6.2)*ns;const nameGap=mm((.55+(Number(L.nameGap)||0)))*ns;const nameStep=nameSize+nameGap;drawVerticalText(ctx,main,mm(nx),mm(ny),nameSize,nameGap,600,24);
   const tx=64+(Number(L.titleX)||0),ty=48+(Number(L.titleY)||0),ts=clamp(Number(L.titleScale)||1,.65,2.1);if(title)drawVerticalText(ctx,title,mm(tx),mm(ty),mm(4.15)*ts,mm(.38)*ts,500,24);
-  // 御侍史は「侍」を主表示の敬称末尾へ自動整列。老師/老宗師なら「師」、寺院名モードなら末尾の「様」へ合わせる。
-  if(np.honorific2){const gx=44+(Number(L.gyojiX)||0);let anchorY;if(honor){anchorY=honorY+Math.max(0,[...honor].length-1)*nameStep}else{anchorY=mm(ny)+Math.max(0,[...main].length-1)*nameStep}const gyojiChars=[...String(np.honorific2)];const anchorIndex=Math.max(0,gyojiChars.indexOf('侍'));const gyPx=anchorY-anchorIndex*nameStep+mm(Number(L.gyojiY)||0);drawVerticalText(ctx,np.honorific2,mm(gx),gyPx,nameSize,nameGap,600,8)}
+  // 御侍史は「侍」を主宛名の最終文字へ自動整列。老師/老宗師/様を含め、共通の完成主宛名末尾が基準。
+  if(pn.honorific2){const gx=44+(Number(L.gyojiX)||0);const anchorY=mm(ny)+Math.max(0,[...main].length-1)*nameStep;const gyojiChars=[...String(pn.honorific2)];const anchorIndex=Math.max(0,gyojiChars.indexOf('侍'));const gyPx=anchorY-anchorIndex*nameStep+mm(Number(L.gyojiY)||0);drawVerticalText(ctx,pn.honorific2,mm(gx),gyPx,nameSize,nameGap,600,8)}
   return c}
 function postcardAdjRow(label,key,delta,isScale=false){return `<div class="offering-control"><span>${label}</span><div><button class="btn small" data-postcard-adj="${key}" data-delta="-${delta}">${isScale?'−':'←/↑'}</button><strong id="postcardAdj_${key}"></strong><button class="btn small" data-postcard-adj="${key}" data-delta="${delta}">${isScale?'＋':'→/↓'}</button></div></div>`}
 function updatePostcardAdjustLabels(root,L){const B=defaultPostcardSettings().layout;const scaleKeys=['zipScale','addressScale','titleScale','nameScale'];for(const k of scaleKeys){const e=$('#postcardAdj_'+k,root);if(!e)continue;if(k==='zipScale'){e.textContent=`${Math.round(((Number(L[k])||1)-1)*100)}%`}else{const base=Number(B[k])||1,v=Number(L[k])||base;e.textContent=`${Math.round((v/base-1)*100)}%`}}for(const k of ['zipX','zipY','addressX','addressY','titleX','titleY','nameX','nameY','gyojiX','gyojiY']){const e=$('#postcardAdj_'+k,root);if(!e)continue;const base=Number(B[k])||0,v=(Number(L[k])||0)-base;e.textContent=`${v>0?'+':''}${v}mm`}const ng=$('#postcardAdj_nameGap',root);if(ng){const v=(Number(L.nameGap)||0)-(Number(B.nameGap)||0);ng.textContent=`${v>0?'+':''}${v.toFixed(2)}mm`}for(let i=0;i<7;i++){const e=$(`#postcardDigit_${i}`,root),v=Number(L.zipDigitX?.[i])||0;if(e)e.textContent=`${v>0?'+':''}${v}mm`}}
 async function postcardPreviewModal(){const list=selectedPostcardData();if(!list.length){toast('郵便番号・住所・氏名が揃った対象がありません');return}await ensurePostcardFontLoaded();let L={...ensurePostcardSettings().layout,zipDigitX:[...(ensurePostcardSettings().layout.zipDigitX||[0,0,0,0,0,0,0])]};const back=document.createElement('div');back.className='modal-backdrop';back.innerHTML=`<div class="modal" style="max-width:800px"><h3>ハガキプレビュー</h3><div class="offering-preview-wrap" id="postcardPreviewWrap" style="max-height:58dvh;background:#ddd"></div><div class="muted" style="margin:8px 0 12px">100×148mm / 対象 ${list.length}件（赤枠はプレビュー用。PDFには印刷しません）</div><div class="grid3"><button class="btn" id="postcardPreviewCancel">戻る</button><button class="btn" id="postcardPreviewEdit">編集</button><button class="btn primary" id="postcardMakePdf">PDFを作成</button></div><div class="offering-editor hidden" id="postcardEditor"><div class="section-title">郵便番号 全体</div>${postcardAdjRow('郵便番号 左右','zipX',.5)}${postcardAdjRow('郵便番号 上下','zipY',.5)}${postcardAdjRow('郵便番号 サイズ','zipScale',.05,true)}<div class="section-title">郵便番号 1桁ずつ左右</div><div id="postcardDigitControls">${[0,1,2,3,4,5,6].map(i=>`<div class="offering-control"><span>${i+1}桁目</span><div><button class="btn small" data-postcard-digit="${i}" data-delta="-.25">←</button><strong id="postcardDigit_${i}">0mm</strong><button class="btn small" data-postcard-digit="${i}" data-delta=".25">→</button></div></div>`).join('')}</div><div class="section-title">住所</div>${postcardAdjRow('住所 左右','addressX',1)}${postcardAdjRow('住所 上下','addressY',1)}${postcardAdjRow('住所 サイズ','addressScale',.05,true)}<div class="section-title">寺号・役職</div>${postcardAdjRow('寺号役職 左右','titleX',1)}${postcardAdjRow('寺号役職 上下','titleY',1)}${postcardAdjRow('寺号役職 サイズ','titleScale',.05,true)}<div class="section-title">氏名・敬称1</div>${postcardAdjRow('氏名 左右','nameX',1)}${postcardAdjRow('氏名 上下','nameY',1)}${postcardAdjRow('氏名 サイズ','nameScale',.05,true)}${postcardAdjRow('氏名 文字間隔','nameGap',.05)}<div class="section-title">敬称2（御侍史）</div><div class="muted" style="margin-bottom:6px">0mmで「侍」を敬称1の最後の文字へ自動整列します。</div>${postcardAdjRow('御侍史 左右','gyojiX',1)}${postcardAdjRow('御侍史 上下','gyojiY',1)}</div></div>`;document.body.append(back);const redraw=()=>{const canvas=postcardCanvas(list[0],L,true),w=$('#postcardPreviewWrap',back);w.innerHTML='';canvas.style.width='min(390px,78vw)';canvas.style.height='auto';w.append(canvas);updatePostcardAdjustLabels(back,L)};redraw();$('#postcardPreviewCancel',back).onclick=()=>back.remove();$('#postcardPreviewEdit',back).onclick=()=>$('#postcardEditor',back).classList.toggle('hidden');$$('[data-postcard-adj]',back).forEach(b=>b.onclick=()=>{const k=b.dataset.postcardAdj,d=Number(b.dataset.delta);if(k.endsWith('Scale')){const base=Number(defaultPostcardSettings().layout[k])||1;L[k]=Number(((L[k]??base)+Math.sign(d)*base*.05).toFixed(3))}else{L[k]=Number(((L[k]??0)+d).toFixed(2))}redraw()});$$('[data-postcard-digit]',back).forEach(b=>b.onclick=()=>{const i=Number(b.dataset.postcardDigit),d=Number(b.dataset.delta);L.zipDigitX[i]=Number(((L.zipDigitX[i]||0)+d).toFixed(2));redraw()});$('#postcardMakePdf',back).onclick=async()=>{ensurePostcardSettings().layout={...L,zipDigitX:[...L.zipDigitX]};autoSave();await makePostcardPdf(list);back.remove()}}
 async function makePostcardPdf(list){const JSPDF=window.jspdf?.jsPDF;if(!JSPDF){alert('PDFライブラリを読み込めていません。初回だけインターネット接続が必要です。');return}await ensurePostcardFontLoaded();try{const pdf=new JSPDF({orientation:'portrait',unit:'mm',format:[100,148],compress:true});for(let i=0;i<list.length;i++){if(i>0)pdf.addPage([100,148],'portrait');const canvas=postcardCanvas(list[i],null,false);pdf.addImage(canvas.toDataURL('image/jpeg',.96),'JPEG',0,0,100,148,undefined,'FAST')}const blob=pdf.output('blob'),url=URL.createObjectURL(blob),opened=window.open(url,'_blank');if(!opened){downloadBlob(blob,`ハガキ_${stamp()}.pdf`);toast('ハガキPDFを保存しました')}else setTimeout(()=>URL.revokeObjectURL(url),60000)}catch(e){console.error(e);alert('ハガキPDFを作成できませんでした。\n'+e.message)}}
-function receiptDataForRecord(r,mode){const items=receiptMoneyItems(r,mode);return {record:r,items,total:items.reduce((a,x)=>a+x.amount,0),name:namePartsForUse(r,'領収書'),no:actualNo(r)}}
+function receiptDataForRecord(r,mode){const items=receiptMoneyItems(r,mode);return {record:r,items,total:items.reduce((a,x)=>a+x.amount,0),printName:printNameForUse(r,'領収書'),no:actualNo(r)}}
 function parseNoSpec(spec){const out=new Set();String(spec||'').split(/[、,\s]+/).filter(Boolean).forEach(part=>{const m=/^(\d+)\s*[-ー〜~]\s*(\d+)$/.exec(part);if(m){let a=Number(m[1]),b=Number(m[2]);if(a>b)[a,b]=[b,a];for(let n=a;n<=b;n++)out.add(n)}else if(/^\d+$/.test(part))out.add(Number(part))});return [...out].sort((a,b)=>a-b)}
 function selectedReceiptData(){let recs=[];if(state.receiptTargetMode==='全員')recs=[...state.records];else if(state.receiptTargetMode==='No.指定'){const nums=new Set(parseNoSpec(state.receiptNoRange));recs=state.records.filter(r=>nums.has(actualNo(r)))}else{const n=Math.max(1,Number(state.receiptSingleNo)||1);recs=state.records.filter(r=>actualNo(r)===n)}return recs.map(r=>receiptDataForRecord(r,state.receiptIssueMode)).filter(x=>x.total>0)}
 function reiwaDateString(d=new Date()){const y=d.getFullYear()-2018;return `令和${y}年${d.getMonth()+1}月${d.getDate()}日`}
@@ -626,11 +635,11 @@ async function receiptCanvas(data,layoutOverride=null){
   // 見出し・番号
   canvasFont(ctx,mm(7.2),600);ctx.textAlign='center';ctx.fillText('領 収 書',mm(74),mm(13));
   canvasFont(ctx,mm(4.4),500);ctx.textAlign='left';ctx.fillText(`No.  ${data.no}`,mm(115),mm(14.2));ctx.lineWidth=mm(.25);ctx.beginPath();ctx.moveTo(mm(108),mm(18));ctx.lineTo(mm(137),mm(18));ctx.stroke();
-  // 宛名：旧標準の -5mm を新しい 0mm 基準にする。
-  const ry=Number(L.recipientY)||0,rs=clamp(Number(L.recipientScale)||1,.65,1.5);ctx.textAlign='left';
+  // 宛名：共通の印刷用解釈を使用。寺院名モードの完成表記は氏名欄（主宛名）へ出す。
+  const ry=Number(L.recipientY)||0,rs=clamp(Number(L.recipientScale)||1,.65,1.5),pn=data.printName;ctx.textAlign='left';
   const recipientBase=-5+ry;
-  if(data.name.line1){let px=fitCanvasText(ctx,data.name.line1,mm(64),mm(4.68)*rs,mm(3.1),500);canvasFont(ctx,px,500);ctx.fillText(data.name.line1,mm(14),mm(24+recipientBase))}
-  const second=[data.name.line2,data.name.honorific1].filter(Boolean).join(' ');if(second){const recipientGap=mm(0.22)*rs;let px=fitCanvasSpacedText(ctx,second,mm(63),mm(6.30)*rs,mm(3.4),600,recipientGap);canvasFont(ctx,px,600);drawSpacedText(ctx,second,mm(18),mm(32+recipientBase),recipientGap,'left')}
+  if(pn.titleRole){let px=fitCanvasText(ctx,pn.titleRole,mm(64),mm(4.68)*rs,mm(3.1),500);canvasFont(ctx,px,500);ctx.fillText(pn.titleRole,mm(14),mm(24+recipientBase))}
+  if(pn.mainName){const recipientGap=mm(0.22)*rs;let px=fitCanvasSpacedText(ctx,pn.mainName,mm(63),mm(6.30)*rs,mm(3.4),600,recipientGap);canvasFont(ctx,px,600);drawSpacedText(ctx,pn.mainName,mm(18),mm(32+recipientBase),recipientGap,'left')}
   // 氏名と下線が重ならないよう約2mmの余白を確保。
   ctx.lineWidth=mm(.2);ctx.beginPath();ctx.moveTo(mm(13),mm(37+recipientBase));ctx.lineTo(mm(78),mm(37+recipientBase));ctx.stroke();
   // 金額枠：高さを圧縮して内訳領域を確保。
