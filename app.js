@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.42';
+const APP_VERSION = '0.43';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -27,8 +27,8 @@ function norm(s=''){return hiraToKata(String(s).normalize('NFKC')).replace(/[\s�
 function roleFromCol(c){return c.startsWith('寺族')?'寺族':c}
 function blankMoney(){const o={};[...INCOME,...EXPENSE].forEach(k=>o[k]=null);return o}
 
-function defaultReceiptSettings(){return {phone:'',mobile:'',address:'',mountain:'',temple:'',sealEnabled:false,sealDataUrl:'',history:{},layout:{recipientScale:1,recipientY:0,amountScale:1,amountY:0,detailScale:1,detailY:0,issuerScale:1,issuerY:0,sealScale:1,sealX:0,sealY:0}}}
-function ensureReceiptSettings(){const d=defaultReceiptSettings();state.receiptSettings={...d,...(state.receiptSettings||{})};state.receiptSettings.layout={...d.layout,...(state.receiptSettings.layout||{})};state.receiptSettings.history=state.receiptSettings.history&&typeof state.receiptSettings.history==='object'?state.receiptSettings.history:{};return state.receiptSettings}
+function defaultReceiptSettings(){return {phone:'',mobile:'',address:'',mountain:'',temple:'',sealEnabled:false,sealDataUrl:'',history:{},layoutVersion:2,layout:{recipientScale:1,recipientY:0,amountScale:1,amountY:0,detailScale:1,detailY:0,issuerScale:1,issuerY:0,sealScale:1,sealX:0,sealY:0}}}
+function ensureReceiptSettings(){const d=defaultReceiptSettings();state.receiptSettings={...d,...(state.receiptSettings||{})};state.receiptSettings.layout={...d.layout,...(state.receiptSettings.layout||{})};state.receiptSettings.history=state.receiptSettings.history&&typeof state.receiptSettings.history==='object'?state.receiptSettings.history:{};if((Number(state.receiptSettings.layoutVersion)||0)<2){state.receiptSettings.layout.recipientScale=1;state.receiptSettings.layout.amountY=0;state.receiptSettings.layout.issuerScale=1;state.receiptSettings.layoutVersion=2}return state.receiptSettings}
 
 function defaultRules(){return {kaishinLine:null,noReturnDistricts:[],fullReturnPeople:[],honorarium:{},appliedCount:0}}
 function ensureRules(){const d=defaultRules();state.rules={...d,...(state.rules||{})};state.rules.noReturnDistricts=Array.isArray(state.rules.noReturnDistricts)?state.rules.noReturnDistricts:[];state.rules.fullReturnPeople=Array.isArray(state.rules.fullReturnPeople)?state.rules.fullReturnPeople:[];state.rules.honorarium=state.rules.honorarium&&typeof state.rules.honorarium==='object'?state.rules.honorarium:{};state.rules.appliedCount=Number(state.rules.appliedCount)||0;return state.rules}
@@ -546,12 +546,12 @@ async function receiptCanvas(data,layoutOverride=null){
   // 宛名：旧標準の -5mm を新しい 0mm 基準にする。
   const ry=Number(L.recipientY)||0,rs=clamp(Number(L.recipientScale)||1,.65,1.5);ctx.textAlign='left';
   const recipientBase=-5+ry;
-  if(data.name.line1){let px=fitCanvasText(ctx,data.name.line1,mm(64),mm(5.2)*rs,mm(3.1),500);canvasFont(ctx,px,500);ctx.fillText(data.name.line1,mm(14),mm(24+recipientBase))}
-  const second=[data.name.line2,data.name.honorific1].filter(Boolean).join(' ');if(second){let px=fitCanvasText(ctx,second,mm(63),mm(7.0)*rs,mm(3.4),600);canvasFont(ctx,px,600);ctx.fillText(second,mm(18),mm(32+recipientBase))}
+  if(data.name.line1){let px=fitCanvasText(ctx,data.name.line1,mm(64),mm(4.68)*rs,mm(3.1),500);canvasFont(ctx,px,500);ctx.fillText(data.name.line1,mm(14),mm(24+recipientBase))}
+  const second=[data.name.line2,data.name.honorific1].filter(Boolean).join(' ');if(second){let px=fitCanvasText(ctx,second,mm(63),mm(6.30)*rs,mm(3.4),600);canvasFont(ctx,px,600);ctx.fillText(second,mm(18),mm(32+recipientBase))}
   // 氏名と下線が重ならないよう約2mmの余白を確保。
   ctx.lineWidth=mm(.2);ctx.beginPath();ctx.moveTo(mm(13),mm(37+recipientBase));ctx.lineTo(mm(78),mm(37+recipientBase));ctx.stroke();
   // 金額枠：高さを圧縮して内訳領域を確保。
-  const ay=Number(L.amountY)||0,as=clamp(Number(L.amountScale)||1,.7,1.4);const boxY=38.5+ay,boxH=14.5;ctx.fillStyle='#e5e5e5';ctx.fillRect(mm(30),mm(boxY),mm(88),mm(boxH));ctx.strokeStyle='#000';ctx.lineWidth=mm(.55);ctx.strokeRect(mm(30),mm(boxY),mm(88),mm(boxH));ctx.fillStyle='#000';canvasFont(ctx,mm(4.0)*as,500);ctx.textAlign='left';ctx.fillText('金額',mm(37),mm(boxY+5.4));canvasFont(ctx,mm(8.1)*as,500);ctx.textAlign='center';ctx.fillText(`¥${fmt(data.total)}`,mm(75),mm(boxY+8.0));canvasFont(ctx,mm(5.8)*as,500);ctx.textAlign='center';ctx.fillText('円也',mm(106),mm(boxY+8.3));
+  const ay=Number(L.amountY)||0,as=clamp(Number(L.amountScale)||1,.7,1.4);const boxY=35.5+ay,boxH=14.5;ctx.fillStyle='#e5e5e5';ctx.fillRect(mm(30),mm(boxY),mm(88),mm(boxH));ctx.strokeStyle='#000';ctx.lineWidth=mm(.55);ctx.strokeRect(mm(30),mm(boxY),mm(88),mm(boxH));ctx.fillStyle='#000';canvasFont(ctx,mm(4.0)*as,500);ctx.textAlign='left';ctx.fillText('金額',mm(37),mm(boxY+5.4));canvasFont(ctx,mm(8.1)*as,500);ctx.textAlign='center';ctx.fillText(`¥${fmt(data.total)}`,mm(75),mm(boxY+8.0));canvasFont(ctx,mm(5.8)*as,500);ctx.textAlign='center';ctx.fillText('円也',mm(106),mm(boxY+8.3));
   // 内訳：標準を旧位置より5mm上へ。5項目すべてある場合だけ問候・献香を右ブロックへ。
   const dy=Number(L.detailY)||0,ds=clamp(Number(L.detailScale)||1,.7,1.4);const detailTop=56+dy;canvasFont(ctx,mm(3.35)*ds,500);ctx.textAlign='left';ctx.fillText('内訳',mm(24),mm(detailTop));
   const drawDetailColumn=(items,labelX,amountX,startY)=>{let yy=startY;for(const item of items){canvasFont(ctx,mm(3.55)*ds,500);ctx.textAlign='left';ctx.fillText(item.label,mm(labelX),mm(yy));ctx.textAlign='right';ctx.fillText(`${fmt(item.amount)}円`,mm(amountX),mm(yy));yy+=4.3}};
@@ -560,15 +560,17 @@ async function receiptCanvas(data,layoutOverride=null){
   canvasFont(ctx,mm(3.5),500);ctx.textAlign='left';ctx.fillText(reiwaDateString(),mm(24),mm(78));ctx.fillText('上記正に領収いたしました',mm(70),mm(78));
   // 印影は寺院名より先に描く（JPEGの白背景でも文字を前面へ）
   if(st.sealEnabled&&st.sealDataUrl){try{const im=await loadCanvasImage(st.sealDataUrl);if(im){const ss=clamp(Number(L.sealScale)||1,.35,2),sx=Number(L.sealX)||0,sy=Number(L.sealY)||0;const w=mm(18*ss),h=w;ctx.drawImage(im,mm(120+sx),mm(83+sy),w,h)}}catch(e){console.warn('印影読込失敗',e)}}
-  // 発行者情報：電話・住所・山号・寺院名を1ブロック化。携帯番号は表示しない。
-  const iy=Number(L.issuerY)||0,is=clamp(Number(L.issuerScale)||1,.7,1.4);const issuerX=76;
-  canvasFont(ctx,mm(2.9)*is,500);ctx.textAlign='left';if(st.phone)ctx.fillText(`TEL：${st.phone}`,mm(issuerX),mm(86+iy));if(st.address)ctx.fillText(st.address,mm(issuerX),mm(90.5+iy));
-  // 山号と寺院名は1文字ずつ字間を取り、両者の間は約1文字分に詰める。
-  const baseY=98+iy;const mountainSize=mm(3.15)*is,templeSize=mm(6.0)*is,mountainGap=mm(1.15)*is,templeGap=mm(1.35)*is;
-  let mountainW=0,templeW=0;if(st.mountain){canvasFont(ctx,mountainSize,500);mountainW=spacedTextWidth(ctx,st.mountain,mountainGap)}if(st.temple){canvasFont(ctx,templeSize,600);templeW=spacedTextWidth(ctx,st.temple,templeGap)}
-  const between=st.mountain&&st.temple?mm(4.0)*is:0;const totalW=mountainW+between+templeW;let startX=mm(111)-totalW/2;
-  if(st.mountain){canvasFont(ctx,mountainSize,500);drawSpacedText(ctx,st.mountain,startX,mm(baseY),mountainGap,'left');startX+=mountainW+between}
-  if(st.temple){canvasFont(ctx,templeSize,600);drawSpacedText(ctx,st.temple,startX,mm(baseY),templeGap,'left')}
+  // 発行者情報：山号＋寺院名を同じ下端（文字ベースライン）で揃え、その下に住所→電話番号。
+  // ブロック全体は左揃えで、「上記正に領収いたしました」の「に」付近から開始する。
+  const iy=Number(L.issuerY)||0,is=clamp(Number(L.issuerScale)||1,.7,1.4);const issuerX=84;
+  const baseY=88.5+iy;const mountainSize=mm(3.78)*is,templeSize=mm(7.20)*is,mountainGap=mm(1.15)*is,templeGap=mm(1.35)*is;
+  let mountainW=0;if(st.mountain){canvasFont(ctx,mountainSize,500);mountainW=spacedTextWidth(ctx,st.mountain,mountainGap)}
+  const between=st.mountain&&st.temple?mm(3.6)*is:0;let startX=mm(issuerX);
+  const oldBaseline=ctx.textBaseline;ctx.textBaseline='alphabetic';
+  if(st.mountain){canvasFont(ctx,mountainSize,500);ctx.textBaseline='alphabetic';drawSpacedText(ctx,st.mountain,startX,mm(baseY),mountainGap,'left');startX+=mountainW+between}
+  if(st.temple){canvasFont(ctx,templeSize,600);ctx.textBaseline='alphabetic';drawSpacedText(ctx,st.temple,startX,mm(baseY),templeGap,'left')}
+  ctx.textBaseline=oldBaseline;
+  canvasFont(ctx,mm(3.48)*is,500);ctx.textAlign='left';if(st.address)ctx.fillText(st.address,mm(issuerX),mm(95+iy));if(st.phone)ctx.fillText(`TEL：${st.phone}`,mm(issuerX),mm(100+iy));
   return c;
 }
 async function receiptPreviewModal(){const list=selectedReceiptData();if(!list.length){toast('選択した範囲に領収書対象の金額がありません');return}let L={...ensureReceiptSettings().layout};const back=document.createElement('div');back.className='modal-backdrop';back.innerHTML=`<div class="modal" style="max-width:760px"><h3>領収書プレビュー</h3><div class="offering-preview-wrap" id="receiptPreviewWrap" style="max-height:55dvh"></div><div class="muted" style="margin:8px 0 12px">A6横 / ${esc(state.receiptIssueMode)} / 対象 ${list.length}件（プレビューは先頭の1件）</div><div class="grid3"><button class="btn" id="receiptPreviewCancel">戻る</button><button class="btn" id="receiptPreviewEdit">編集</button><button class="btn primary" id="receiptMakePdf">PDFを作成</button></div><div class="offering-editor hidden" id="receiptEditor"><div class="section-title">微調整</div>${receiptAdjustRow('宛名サイズ','recipientScale',.05,true)}${receiptAdjustRow('宛名上下','recipientY',1,false)}${receiptAdjustRow('金額サイズ','amountScale',.05,true)}${receiptAdjustRow('金額上下','amountY',1,false)}${receiptAdjustRow('内訳サイズ','detailScale',.05,true)}${receiptAdjustRow('内訳上下','detailY',1,false)}${receiptAdjustRow('発行者サイズ','issuerScale',.05,true)}${receiptAdjustRow('発行者上下','issuerY',1,false)}${receiptAdjustRow('印影サイズ','sealScale',.05,true)}${receiptAdjustRow('印影左右','sealX',1,false)}${receiptAdjustRow('印影上下','sealY',1,false)}</div></div>`;document.body.append(back);let canvas=null;const redraw=async()=>{canvas=await receiptCanvas(list[0],L);const w=$('#receiptPreviewWrap',back);w.innerHTML='';canvas.style.width='min(620px,92vw)';w.append(canvas);updateReceiptAdjustLabels(back,L)};await redraw();$('#receiptPreviewCancel',back).onclick=()=>back.remove();$('#receiptPreviewEdit',back).onclick=()=>$('#receiptEditor',back).classList.toggle('hidden');$$('[data-receipt-adj]',back).forEach(b=>b.onclick=async()=>{const k=b.dataset.receiptAdj,d=Number(b.dataset.delta);L[k]=Number(((L[k]??(k.endsWith('Scale')?1:0))+d).toFixed(2));await redraw()});$('#receiptMakePdf',back).onclick=async()=>{ensureReceiptSettings().layout={...L};autoSave();await makeReceiptPdf(list);back.remove()}}
