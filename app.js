@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.35';
+const APP_VERSION = '0.37';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -58,7 +58,7 @@ function ensureCashControl(){
 }
 function nameTitleChoices(role){
   const m={
-    '住職':[['{寺号}尊董','○○寺尊董']],
+    '住職':[['{寺号}尊董','○○寺尊董'],['{寺号}住職','○○寺住職']],
     '東堂':[['{寺号}東堂','○○寺東堂']],
     '副住職':[['{寺号}御山内','○○寺御山内'],['{寺号}御山裡','○○寺御山裡'],['{寺号}副住職','○○寺副住職']],
     '徒弟':[['{寺号}御山内','○○寺御山内'],['{寺号}御山裡','○○寺御山裡'],['{寺号}徒弟','○○寺徒弟']],
@@ -69,7 +69,7 @@ function nameTitleChoices(role){
 function nameHonorificChoices(role){if(role==='住職'||role==='東堂')return ['老宗師','老師','様'];if(['副住職','徒弟','御山内'].includes(role))return ['宗師','様'];if(role==='寺族')return ['様'];return []}
 function nameShortChoices(role){
   const m={
-    '住職':[['{寺号寺抜き}方丈','○○方丈'],['{寺号}方丈様','○○寺方丈様'],['{氏名}様','氏名様']],
+    '住職':[['{寺号寺抜き}方丈','○○方丈'],['{寺号}方丈様','○○寺方丈様'],['{寺号}様','○○寺様'],['{氏名}様','氏名様']],
     '東堂':[['{寺号寺抜き}東堂','○○東堂'],['{寺号}東堂様','○○寺東堂様'],['{氏名}様','氏名様']],
     '副住職':[['{氏名}様','氏名様'],['{寺号}副住職','○○寺副住職'],['{寺号}御山内','○○寺御山内'],['{寺号}御山裡','○○寺御山裡']],
     '徒弟':[['{氏名}様','氏名様'],['{寺号}徒弟','○○寺徒弟'],['{寺号}御山内','○○寺御山内'],['{寺号}御山裡','○○寺御山裡']],
@@ -85,9 +85,46 @@ function defaultNameRoleConfig(role){
   return {titleTemplate:title,titleCustom:'',honorific,honorificCustom:'',gyoji,shortTemplate:short,shortCustom:''};
 }
 function defaultNameRules(){
-  const modes={'ハガキ':'postal','封筒':'postal','領収書':'temple','可漏':'temple','謝誼袋':'temple','部屋':'temple','引き物':'temple','下足':'temple'};
-  const uses={};for(const use of NAME_USES){const roles={};for(const role of NAME_RULE_ROLES)roles[role]=defaultNameRoleConfig(role);uses[use]={mode:modes[use]||'temple',roles,titlePreset:'oyamauchi',honorificPreset:'老師',gyojiPreset:'on',templeSuffixPreset:'noTemple',templeSubPreset:'name',templeSamaPreset:'off'}}
-  return {version:2,uses};
+  const modes={'ハガキ':'postal','封筒':'postal','領収書':'person','可漏':'temple','謝誼袋':'person','部屋':'temple','引き物':'temple','下足':'temple'};
+  const uses={};
+  for(const use of NAME_USES){
+    const roles={};for(const role of NAME_RULE_ROLES)roles[role]=defaultNameRoleConfig(role);
+    uses[use]={mode:modes[use]||'temple',roles,titlePreset:'oyamauchi',honorificPreset:'老師',gyojiPreset:'on',templeSuffixPreset:'noTemple',templeSubPreset:'name',templeSamaPreset:'off'};
+  }
+  // ハガキ・封筒：従来の郵便既定値。
+  for(const use of ['ハガキ','封筒']){
+    applyNameTitlePreset(uses[use],'oyamauchi');applyHonorificPreset(uses[use],'老師');applyGyojiPreset(uses[use],'on');
+  }
+  // 領収書・謝誼袋：個人名。○○寺住職/東堂/副住職、徒弟・御山内は御山内、寺族は寺族。全員「様」。
+  for(const use of ['領収書','謝誼袋']){
+    const u=uses[use];u.mode='person';
+    const titles={'住職':'{寺号}住職','東堂':'{寺号}東堂','副住職':'{寺号}副住職','徒弟':'{寺号}御山内','御山内':'{寺号}御山内','寺族':'{寺号}寺族'};
+    for(const role of NAME_RULE_ROLES){setTemplateChoice(u.roles[role],'titleTemplate',titles[role]);u.roles[role].honorific='様';u.roles[role].honorificCustom='';u.roles[role].gyoji=false}
+    u.titlePreset='custom';u.honorificPreset='様';u.gyojiPreset='off';
+  }
+  // 可漏：寺院名。住職・東堂は寺を抜いた肩書、その他は氏名様。
+  {
+    const u=uses['可漏'];u.mode='temple';u.templeSamaPreset='off';
+    setTemplateChoice(u.roles['住職'],'shortTemplate','{寺号寺抜き}方丈');setTemplateChoice(u.roles['東堂'],'shortTemplate','{寺号寺抜き}東堂');
+    for(const role of ['副住職','徒弟','御山内','寺族'])setTemplateChoice(u.roles[role],'shortTemplate','{氏名}様');
+    u.templeSuffixPreset='noTemple';u.templeSubPreset='name';u.templeSamaPreset='custom';
+  }
+  // 部屋：○○寺様 / ○○寺東堂様 / 副住職以下は氏名様。
+  {
+    const u=uses['部屋'];u.mode='temple';
+    setTemplateChoice(u.roles['住職'],'shortTemplate','{寺号}様');setTemplateChoice(u.roles['東堂'],'shortTemplate','{寺号}東堂様');
+    for(const role of ['副住職','徒弟','御山内','寺族'])setTemplateChoice(u.roles[role],'shortTemplate','{氏名}様');
+    u.templeSuffixPreset='custom';u.templeSubPreset='name';u.templeSamaPreset='on';
+  }
+  // 引き物・下足：部屋と同じだが寺族だけ○○寺寺族様。
+  for(const use of ['引き物','下足']){
+    const u=uses[use];u.mode='temple';
+    setTemplateChoice(u.roles['住職'],'shortTemplate','{寺号}様');setTemplateChoice(u.roles['東堂'],'shortTemplate','{寺号}東堂様');
+    for(const role of ['副住職','徒弟','御山内'])setTemplateChoice(u.roles[role],'shortTemplate','{氏名}様');
+    setTemplateChoice(u.roles['寺族'],'shortTemplate','{寺号}寺族様');
+    u.templeSuffixPreset='custom';u.templeSubPreset='custom';u.templeSamaPreset='on';
+  }
+  return {version:3,uses};
 }
 function detectNameTitlePreset(u){
   const vals={副住職:effectiveNameTitle(u.roles['副住職']),徒弟:effectiveNameTitle(u.roles['徒弟']),御山内:effectiveNameTitle(u.roles['御山内']),寺族:effectiveNameTitle(u.roles['寺族'])};
@@ -121,7 +158,7 @@ function ensureNameRules(){
     if(!['name','oyamauchi','oyamazato','actual','custom'].includes(u.templeSubPreset))u.templeSubPreset=detectTempleSubPreset(u);
     if(!['on','off','custom'].includes(u.templeSamaPreset))u.templeSamaPreset=detectTempleSamaPreset(u);
   }
-  state.nameRules.version=2;if(!NAME_USES.includes(state.nameRuleUse))state.nameRuleUse='ハガキ';return state.nameRules;
+  state.nameRules.version=3;if(!NAME_USES.includes(state.nameRuleUse))state.nameRuleUse='ハガキ';return state.nameRules;
 }
 function setTemplateChoice(cfg,key,val){cfg[key]=val;const customKey=key==='titleTemplate'?'titleCustom':'shortCustom';cfg[customKey]=''}
 function applyNameTitlePreset(u,preset){
@@ -435,10 +472,10 @@ function nameRulesView(){
     const titleOpts=nameSelectOptions(nameTitleChoices(role),c.titleTemplate)+`<option value="__custom__" ${c.titleTemplate==='__custom__'?'selected':''}>自由入力</option>`;
     const honOpts=nameHonorificChoices(role).map(v=>`<option value="${esc(v)}" ${c.honorific===v?'selected':''}>${esc(v)}</option>`).join('')+`<option value="__custom__" ${c.honorific==='__custom__'?'selected':''}>自由入力</option>`;
     return `<div class="name-role-card"><strong>${esc(role)}</strong><div class="name-rule-fields"><label>寺号＋役職<select class="field" data-name-title="${esc(role)}">${titleOpts}</select></label><label class="${c.titleTemplate==='__custom__'?'':'hidden'}" data-name-title-custom-wrap="${esc(role)}">自由テンプレート<input class="field" data-name-title-custom="${esc(role)}" value="${esc(c.titleCustom||'')}" placeholder="例：{寺号}御山内"></label><label>氏名の敬称<select class="field" data-name-honorific="${esc(role)}">${honOpts}</select></label><label class="${c.honorific==='__custom__'?'':'hidden'}" data-name-honorific-custom-wrap="${esc(role)}">自由敬称<input class="field" data-name-honorific-custom="${esc(role)}" value="${esc(c.honorificCustom||'')}"></label>${u.mode==='postal'?`<label class="name-toggle"><input type="checkbox" data-name-gyoji="${esc(role)}" ${c.gyoji?'checked':''}> 御侍史を付ける</label>`:''}</div></div>`}).join('');
-  const previews=state.records.slice(0,8).map(r=>`<tr><td>${esc([r.temple,r.role,r.name].filter(Boolean).join(' / '))}</td><td class="name-preview" data-name-preview-id="${esc(r.id)}">${esc(generatedNameForUse(r,use)).replace(/\n/g,'<br>')}</td></tr>`).join('')||'<tr><td colspan="2" class="muted">登録済みデータがありません。</td></tr>';
-  return `<div class="card"><h3>用途を選択</h3><div class="chips">${useButtons}</div><div class="muted" style="margin-top:8px">ハガキ・封筒・領収書・可漏・謝誼袋・部屋・引き物・下足をそれぞれ独立して設定します。</div></div><div class="card"><div class="row"><div class="grow"><h3 style="margin:0">${esc(use)} の表記</h3><div class="muted">現在：${esc(NAME_MODE_LABELS[u.mode])}モード</div></div><button class="btn small" id="resetNameUse">この用途を初期値に戻す</button></div><div class="row" style="margin:12px 0">${modeButtons}</div><div class="notice ${u.mode==='postal'?'':'hidden'}">郵便：寺号＋役職 / 氏名＋敬称 / 御侍史。まず一括設定し、必要な役職だけ個別変更します。</div><div class="notice ${u.mode==='person'?'':'hidden'}">個人名：郵便モードと同じ連動ルールで、御侍史だけ付けません。</div><div class="notice ${u.mode==='temple'?'':'hidden'}">寺院名：一括で「寺の有無」「副住職以下の表記」「様」を決め、その後に例外だけ修正できます。</div>${bulk}<div class="section-title">役職別の個別調整</div><div class="name-role-grid">${rows}</div><div class="muted" style="margin-top:10px">自由テンプレートでは {寺号} / {寺号寺抜き} / {氏名} / {役職} が使えます。役職なし・一般の方は氏名欄をそのまま自由表記として出力します。</div></div><div class="card"><h3>プレビュー</h3><div class="table-wrap name-preview-table"><table><thead><tr><th>元データ</th><th>${esc(use)} 出力</th></tr></thead><tbody>${previews}</tbody></table></div></div>`;
+  const exampleRows=NAME_RULE_ROLES.map(role=>{const r={id:`example-${role}`,temple:'廣福寺',role,name:'平賀芳徳',district:'第1教区',assignment:''};return `<tr><td><strong>${esc(role)}の場合</strong><div class="muted">廣福寺 / 平賀芳徳</div></td><td class="name-preview" data-name-preview-role="${esc(role)}">${esc(generatedNameForUse(r,use)).replace(/\n/g,'<br>')}</td></tr>`}).join('');
+  return `<div class="card"><h3>用途を選択</h3><div class="chips">${useButtons}</div><div class="muted" style="margin-top:8px">ハガキ・封筒・領収書・可漏・謝誼袋・部屋・引き物・下足をそれぞれ独立して設定します。</div></div><div class="card"><div class="row"><div class="grow"><h3 style="margin:0">${esc(use)} の表記</h3><div class="muted">現在：${esc(NAME_MODE_LABELS[u.mode])}モード</div></div><button class="btn small" id="resetNameUse">この用途を初期値に戻す</button></div><div class="row" style="margin:12px 0">${modeButtons}</div><div class="notice ${u.mode==='postal'?'':'hidden'}">郵便：寺号＋役職 / 氏名＋敬称 / 御侍史。まず一括設定し、必要な役職だけ個別変更します。</div><div class="notice ${u.mode==='person'?'':'hidden'}">個人名：郵便モードと同じ連動ルールで、御侍史だけ付けません。</div><div class="notice ${u.mode==='temple'?'':'hidden'}">寺院名：一括で「寺の有無」「副住職以下の表記」「様」を決め、その後に例外だけ修正できます。</div>${bulk}<div class="section-title">役職別の個別調整</div><div class="name-role-grid">${rows}</div><div class="muted" style="margin-top:10px">自由テンプレートでは {寺号} / {寺号寺抜き} / {氏名} / {役職} が使えます。役職なし・一般の方は氏名欄をそのまま自由表記として出力します。</div></div><div class="card"><h3>実例</h3><div class="muted" style="margin-bottom:10px">名簿が未入力でも確認できるよう、廣福寺・平賀芳徳を固定例として表示します。</div><div class="table-wrap name-preview-table"><table><thead><tr><th>役職</th><th>${esc(use)} 出力例</th></tr></thead><tbody>${exampleRows}</tbody></table></div></div>`;
 }
-function refreshNamePreview(){const use=state.nameRuleUse;$$('[data-name-preview-id]').forEach(el=>{const r=state.records.find(x=>x.id===el.dataset.namePreviewId);if(r)el.innerHTML=esc(generatedNameForUse(r,use)).replace(/\n/g,'<br>')})}
+function refreshNamePreview(){const use=state.nameRuleUse;$$('[data-name-preview-role]').forEach(el=>{const role=el.dataset.namePreviewRole;const r={id:`example-${role}`,temple:'廣福寺',role,name:'平賀芳徳',district:'第1教区',assignment:''};el.innerHTML=esc(generatedNameForUse(r,use)).replace(/\n/g,'<br>')})}
 function bindNameRules(){const n=ensureNameRules();$$('[data-name-use]').forEach(b=>b.onclick=()=>{state.nameRuleUse=b.dataset.nameUse;render()});$$('[data-name-mode]').forEach(b=>b.onclick=()=>{n.uses[state.nameRuleUse].mode=b.dataset.nameMode;autoSave();render()});const u=n.uses[state.nameRuleUse];const bt=$('#bulkNameTitle');if(bt)bt.onchange=()=>{applyNameTitlePreset(u,bt.value);autoSave();render()};const bh=$('#bulkNameHonorific');if(bh)bh.onchange=()=>{applyHonorificPreset(u,bh.value);autoSave();render()};const bg=$('#bulkNameGyoji');if(bg)bg.onchange=()=>{applyGyojiPreset(u,bg.value);autoSave();render()};const bs=$('#bulkTempleSuffix');if(bs)bs.onchange=()=>{applyTempleSuffixPreset(u,bs.value);autoSave();render()};const bsub=$('#bulkTempleSub');if(bsub)bsub.onchange=()=>{applyTempleSubPreset(u,bsub.value);autoSave();render()};const bsa=$('#bulkTempleSama');if(bsa)bsa.onchange=()=>{applyTempleSamaPreset(u,bsa.value);autoSave();render()};$$('[data-name-title]').forEach(el=>el.onchange=()=>{const c=u.roles[el.dataset.nameTitle];c.titleTemplate=el.value;u.titlePreset='custom';const w=$(`[data-name-title-custom-wrap="${CSS.escape(el.dataset.nameTitle)}"]`);if(w)w.classList.toggle('hidden',el.value!=='__custom__');autoSave();refreshNamePreview()});$$('[data-name-title-custom]').forEach(el=>el.oninput=()=>{u.roles[el.dataset.nameTitleCustom].titleCustom=el.value;u.titlePreset='custom';autoSave();refreshNamePreview()});$$('[data-name-honorific]').forEach(el=>el.onchange=()=>{const c=u.roles[el.dataset.nameHonorific];c.honorific=el.value;u.honorificPreset='custom';const w=$(`[data-name-honorific-custom-wrap="${CSS.escape(el.dataset.nameHonorific)}"]`);if(w)w.classList.toggle('hidden',el.value!=='__custom__');autoSave();refreshNamePreview()});$$('[data-name-honorific-custom]').forEach(el=>el.oninput=()=>{u.roles[el.dataset.nameHonorificCustom].honorificCustom=el.value;u.honorificPreset='custom';autoSave();refreshNamePreview()});$$('[data-name-gyoji]').forEach(el=>el.onchange=()=>{u.roles[el.dataset.nameGyoji].gyoji=el.checked;u.gyojiPreset='custom';autoSave();refreshNamePreview()});$$('[data-name-short]').forEach(el=>el.onchange=()=>{const c=u.roles[el.dataset.nameShort];c.shortTemplate=el.value;u.templeSuffixPreset=detectTempleSuffixPreset(u);u.templeSubPreset=detectTempleSubPreset(u);u.templeSamaPreset=detectTempleSamaPreset(u);const w=$(`[data-name-short-custom-wrap="${CSS.escape(el.dataset.nameShort)}"]`);if(w)w.classList.toggle('hidden',el.value!=='__custom__');autoSave();refreshNamePreview()});$$('[data-name-short-custom]').forEach(el=>el.oninput=()=>{u.roles[el.dataset.nameShortCustom].shortCustom=el.value;u.templeSuffixPreset='custom';u.templeSubPreset='custom';u.templeSamaPreset='custom';autoSave();refreshNamePreview()});const reset=$('#resetNameUse');if(reset)reset.onclick=()=>{if(!confirm(`${state.nameRuleUse} の名前ルールを初期値に戻しますか？`))return;const d=defaultNameRules();state.nameRules.uses[state.nameRuleUse]=d.uses[state.nameRuleUse];if(d.uses[state.nameRuleUse].mode==='temple'){applyTempleSuffixPreset(state.nameRules.uses[state.nameRuleUse],'noTemple');applyTempleSubPreset(state.nameRules.uses[state.nameRuleUse],'name');applyTempleSamaPreset(state.nameRules.uses[state.nameRuleUse],'off')}else{applyNameTitlePreset(state.nameRules.uses[state.nameRuleUse],'oyamauchi');applyHonorificPreset(state.nameRules.uses[state.nameRuleUse],'老師');applyGyojiPreset(state.nameRules.uses[state.nameRuleUse],'on')}autoSave();render();toast('初期値に戻しました')}}
 
 function settingsView(){return `<div class="card"><h3>追加名簿</h3><p class="muted">追加寺院 ${state.addedDirectory.temples.length}件 / 追加人物 ${state.addedDirectory.people.length}件</p><div class="grid2"><button class="btn" id="backupDir">追加名簿JSONを書き出す</button><button class="btn" id="restoreDir">追加名簿JSONを読み込む</button></div><input id="dirFile" type="file" accept=".json" class="hidden"></div><div class="card"><h3>第1宗務所名簿</h3><p class="muted">アプリ内蔵：${state.fixedTemples.length}寺院。後から人物名を追記した最新版Excelを読み直すこともできます。</p><button class="btn" id="reloadDirectory">第1宗務所名簿.xlsx を読み込む</button><input id="directoryExcel" type="file" accept=".xlsx,.xls" class="hidden"></div><div class="card"><h3>作業状態</h3><button class="btn danger" id="clearWorkspace">作業データを全消去</button></div>`}
