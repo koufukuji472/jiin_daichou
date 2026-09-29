@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.52';
+const APP_VERSION = '0.53';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -582,7 +582,7 @@ function receiptMoneyItems(r,mode){
   return items;
 }
 
-function selectedPostcardData(){let recs=[];if(state.postcardTargetMode==='全員')recs=[...state.records];else if(state.postcardTargetMode==='No.指定'){const nums=new Set(parseNoSpec(state.postcardNoRange));recs=state.records.filter(r=>nums.has(actualNo(r)))}else{const n=Math.max(1,Number(state.postcardSingleNo)||1);recs=state.records.filter(r=>actualNo(r)===n)}return recs.map(r=>{ensureAddressFields(r);return {record:r,no:actualNo(r),name:namePartsForUse(r,'ハガキ'),zip:postalDigits(r.postalCode),address:String(r.addressKanji||addressToKanji(r.addressNumeric)||'')}}).filter(x=>x.zip.length===7&&x.address&&x.record.name)}
+function selectedPostcardData(){let recs=[];if(state.postcardTargetMode==='全員')recs=[...state.records];else if(state.postcardTargetMode==='No.指定'){const nums=new Set(parseNoSpec(state.postcardNoRange));recs=state.records.filter(r=>nums.has(actualNo(r)))}else{const n=Math.max(1,Number(state.postcardSingleNo)||1);recs=state.records.filter(r=>actualNo(r)===n)}const mode=ensureNameRules().uses['ハガキ']?.mode||'postal';return recs.map(r=>{ensureAddressFields(r);return {record:r,no:actualNo(r),name:namePartsForUse(r,'ハガキ'),nameMode:mode,zip:postalDigits(r.postalCode),address:String(r.addressKanji||addressToKanji(r.addressNumeric)||'')}}).filter(x=>x.zip.length===7&&x.address&&(x.name.line1||x.name.line2||x.record.name))}
 function verticalGlyph(ch){return /[-ー―−－]/.test(ch)?'｜':ch}
 const POSTCARD_FONT_FAMILY='HGSeikaishotaiPRO, HG正楷書体-PRO, HGRSKP, Hiragino Mincho ProN, Yu Mincho, YuMincho, serif';
 async function ensurePostcardFontLoaded(){try{if(document.fonts&&document.fonts.load)await document.fonts.load('16px HGSeikaishotaiPRO')}catch(e){console.warn('正楷書体を読み込めないため代替フォントを使用します',e)}}
@@ -596,11 +596,14 @@ function postcardCanvas(data,layoutOverride=null,showGuides=false){const MM=8,W=
   canvasFont(ctx,mm(5.0)*zs,600);ctx.textAlign='center';ctx.textBaseline='middle';digits.forEach((d,i)=>ctx.fillText(d,mm(zipCenters[i]+zipX+(Number(L.zipDigitX?.[i])||0)),mm(zipY)));
   // 住所：漢数字住所を右側から縦書き。長い住所は左へ折り返す。
   const ax=81+(Number(L.addressX)||0),ay=35+(Number(L.addressY)||0),as=clamp(Number(L.addressScale)||1,.65,1.5);drawVerticalWrapped(ctx,data.address,mm(ax),mm(ay),mm(3.6)*as,mm(.38)*as,24,mm(5.2)*as,500);
-  // 宛名：氏名をハガキ中央に固定し、寺号＋役職を右側へ。敬称1は氏名の続き、御侍史はその横へ。
-  const np=data.name,nx=50+(Number(L.nameX)||0),ny=45+(Number(L.nameY)||0),ns=clamp(Number(L.nameScale)||1,.65,2.4);const name=String(np.line2||data.record.name||'');const honor=String(np.honorific1||'');const nameSize=mm(6.2)*ns;const nameGap=mm((.55+(Number(L.nameGap)||0)))*ns;const nameStep=nameSize+nameGap;const nameHeight=drawVerticalText(ctx,name,mm(nx),mm(ny),nameSize,nameGap,600,20);const honorY=mm(ny)+nameHeight+mm(2.0);if(honor)drawVerticalText(ctx,honor,mm(nx),honorY,nameSize,nameGap,600,8);
-  const tx=64+(Number(L.titleX)||0),ty=48+(Number(L.titleY)||0),ts=clamp(Number(L.titleScale)||1,.65,2.1);if(np.line1)drawVerticalText(ctx,np.line1,mm(tx),mm(ty),mm(4.15)*ts,mm(.38)*ts,500,24);
-  // 御侍史は「侍」を敬称1の最後の文字（老師/老宗師の師、様の様）と自動で横並びにする。gyojiYはその自動位置からの微調整。
-  if(np.honorific2){const gx=44+(Number(L.gyojiX)||0);const honorLastY=honor?honorY+Math.max(0,[...honor].length-1)*nameStep:honorY;const gyojiChars=[...String(np.honorific2)];const anchorIndex=Math.max(0,gyojiChars.indexOf('侍'));const gyPx=honorLastY-anchorIndex*nameStep+mm(Number(L.gyojiY)||0);drawVerticalText(ctx,np.honorific2,mm(gx),gyPx,nameSize,nameGap,600,8)}
+  // 宛名は「名前ルール」のモードをそのまま尊重する。
+  // 郵便/個人名：中央=氏名+敬称1、右=寺号役職。寺院名：中央=寺院名モード表記、右列は出さない。
+  const np=data.name,mode=data.nameMode||'postal',nx=50+(Number(L.nameX)||0),ny=45+(Number(L.nameY)||0),ns=clamp(Number(L.nameScale)||1,.65,2.4);
+  const templeMode=mode==='temple';const main=String(templeMode?np.line1:(np.line2||(!np.line1?data.record.name:'')||''));const honor=String(templeMode?'':(np.honorific1||''));const title=String(templeMode?'':(np.line1||''));
+  const nameSize=mm(6.2)*ns;const nameGap=mm((.55+(Number(L.nameGap)||0)))*ns;const nameStep=nameSize+nameGap;const mainHeight=drawVerticalText(ctx,main,mm(nx),mm(ny),nameSize,nameGap,600,24);const honorY=mm(ny)+mainHeight+mm(2.0);if(honor)drawVerticalText(ctx,honor,mm(nx),honorY,nameSize,nameGap,600,8);
+  const tx=64+(Number(L.titleX)||0),ty=48+(Number(L.titleY)||0),ts=clamp(Number(L.titleScale)||1,.65,2.1);if(title)drawVerticalText(ctx,title,mm(tx),mm(ty),mm(4.15)*ts,mm(.38)*ts,500,24);
+  // 御侍史は「侍」を主表示の敬称末尾へ自動整列。老師/老宗師なら「師」、寺院名モードなら末尾の「様」へ合わせる。
+  if(np.honorific2){const gx=44+(Number(L.gyojiX)||0);let anchorY;if(honor){anchorY=honorY+Math.max(0,[...honor].length-1)*nameStep}else{anchorY=mm(ny)+Math.max(0,[...main].length-1)*nameStep}const gyojiChars=[...String(np.honorific2)];const anchorIndex=Math.max(0,gyojiChars.indexOf('侍'));const gyPx=anchorY-anchorIndex*nameStep+mm(Number(L.gyojiY)||0);drawVerticalText(ctx,np.honorific2,mm(gx),gyPx,nameSize,nameGap,600,8)}
   return c}
 function postcardAdjRow(label,key,delta,isScale=false){return `<div class="offering-control"><span>${label}</span><div><button class="btn small" data-postcard-adj="${key}" data-delta="-${delta}">${isScale?'−':'←/↑'}</button><strong id="postcardAdj_${key}"></strong><button class="btn small" data-postcard-adj="${key}" data-delta="${delta}">${isScale?'＋':'→/↓'}</button></div></div>`}
 function updatePostcardAdjustLabels(root,L){const B=defaultPostcardSettings().layout;const scaleKeys=['zipScale','addressScale','titleScale','nameScale'];for(const k of scaleKeys){const e=$('#postcardAdj_'+k,root);if(!e)continue;if(k==='zipScale'){e.textContent=`${Math.round(((Number(L[k])||1)-1)*100)}%`}else{const base=Number(B[k])||1,v=Number(L[k])||base;e.textContent=`${Math.round((v/base-1)*100)}%`}}for(const k of ['zipX','zipY','addressX','addressY','titleX','titleY','nameX','nameY','gyojiX','gyojiY']){const e=$('#postcardAdj_'+k,root);if(!e)continue;const base=Number(B[k])||0,v=(Number(L[k])||0)-base;e.textContent=`${v>0?'+':''}${v}mm`}const ng=$('#postcardAdj_nameGap',root);if(ng){const v=(Number(L.nameGap)||0)-(Number(B.nameGap)||0);ng.textContent=`${v>0?'+':''}${v.toFixed(2)}mm`}for(let i=0;i<7;i++){const e=$(`#postcardDigit_${i}`,root),v=Number(L.zipDigitX?.[i])||0;if(e)e.textContent=`${v>0?'+':''}${v}mm`}}
