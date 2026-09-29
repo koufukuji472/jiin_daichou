@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.44';
+const APP_VERSION = '0.45';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -27,8 +27,8 @@ function norm(s=''){return hiraToKata(String(s).normalize('NFKC')).replace(/[\s�
 function roleFromCol(c){return c.startsWith('寺族')?'寺族':c}
 function blankMoney(){const o={};[...INCOME,...EXPENSE].forEach(k=>o[k]=null);return o}
 
-function defaultReceiptSettings(){return {phone:'',mobile:'',address:'',mountain:'',temple:'',sealEnabled:false,sealDataUrl:'',history:{},layoutVersion:2,layout:{recipientScale:1,recipientY:0,amountScale:1,amountY:0,detailScale:1,detailY:0,issuerScale:1,issuerY:0,sealScale:1,sealX:0,sealY:0}}}
-function ensureReceiptSettings(){const d=defaultReceiptSettings();state.receiptSettings={...d,...(state.receiptSettings||{})};state.receiptSettings.layout={...d.layout,...(state.receiptSettings.layout||{})};state.receiptSettings.history=state.receiptSettings.history&&typeof state.receiptSettings.history==='object'?state.receiptSettings.history:{};if((Number(state.receiptSettings.layoutVersion)||0)<2){state.receiptSettings.layout.recipientScale=1;state.receiptSettings.layout.amountY=0;state.receiptSettings.layout.issuerScale=1;state.receiptSettings.layoutVersion=2}return state.receiptSettings}
+function defaultReceiptSettings(){return {phone:'',mobile:'',address:'',mountain:'',temple:'',sealEnabled:false,sealDataUrl:'',history:{},layoutVersion:3,layout:{recipientScale:1,recipientY:0,amountScale:1,amountY:0,detailScale:1,detailY:0,issuerScale:1,issuerY:0,sealScale:1,sealX:-5,sealY:0}}}
+function ensureReceiptSettings(){const d=defaultReceiptSettings();state.receiptSettings={...d,...(state.receiptSettings||{})};state.receiptSettings.layout={...d.layout,...(state.receiptSettings.layout||{})};state.receiptSettings.history=state.receiptSettings.history&&typeof state.receiptSettings.history==='object'?state.receiptSettings.history:{};const v=Number(state.receiptSettings.layoutVersion)||0;if(v<2){state.receiptSettings.layout.recipientScale=1;state.receiptSettings.layout.amountY=0;state.receiptSettings.layout.issuerScale=1}if(v<3){state.receiptSettings.layout.sealX=-5}state.receiptSettings.layoutVersion=3;return state.receiptSettings}
 
 function defaultRules(){return {kaishinLine:null,noReturnDistricts:[],fullReturnPeople:[],honorarium:{},appliedCount:0}}
 function ensureRules(){const d=defaultRules();state.rules={...d,...(state.rules||{})};state.rules.noReturnDistricts=Array.isArray(state.rules.noReturnDistricts)?state.rules.noReturnDistricts:[];state.rules.fullReturnPeople=Array.isArray(state.rules.fullReturnPeople)?state.rules.fullReturnPeople:[];state.rules.honorarium=state.rules.honorarium&&typeof state.rules.honorarium==='object'?state.rules.honorarium:{};state.rules.appliedCount=Number(state.rules.appliedCount)||0;return state.rules}
@@ -543,7 +543,7 @@ async function receiptCanvas(data,layoutOverride=null){
   const st=ensureReceiptSettings(),L={...st.layout,...(layoutOverride||{})};const mm=v=>v*MM;
   // 見出し・番号
   canvasFont(ctx,mm(7.2),600);ctx.textAlign='center';ctx.fillText('領 収 書',mm(74),mm(13));
-  canvasFont(ctx,mm(4.4),500);ctx.textAlign='left';ctx.fillText(`No.  ${data.no}`,mm(111),mm(14.2));ctx.lineWidth=mm(.25);ctx.beginPath();ctx.moveTo(mm(108),mm(18));ctx.lineTo(mm(137),mm(18));ctx.stroke();
+  canvasFont(ctx,mm(4.4),500);ctx.textAlign='left';ctx.fillText(`No.  ${data.no}`,mm(116),mm(14.2));ctx.lineWidth=mm(.25);ctx.beginPath();ctx.moveTo(mm(108),mm(18));ctx.lineTo(mm(137),mm(18));ctx.stroke();
   // 宛名：旧標準の -5mm を新しい 0mm 基準にする。
   const ry=Number(L.recipientY)||0,rs=clamp(Number(L.recipientScale)||1,.65,1.5);ctx.textAlign='left';
   const recipientBase=-5+ry;
@@ -558,7 +558,7 @@ async function receiptCanvas(data,layoutOverride=null){
   const drawDetailColumn=(items,labelX,amountX,startY)=>{let yy=startY;for(const item of items){canvasFont(ctx,mm(3.55)*ds,500);ctx.textAlign='left';ctx.fillText(item.label,mm(labelX),mm(yy));ctx.textAlign='right';ctx.fillText(`${fmt(item.amount)}円`,mm(amountX),mm(yy));yy+=4.3}};
   if(data.items.length===5){const left=data.items.filter(x=>!['問候','献香'].includes(x.label));const right=data.items.filter(x=>['問候','献香'].includes(x.label));drawDetailColumn(left,36,75,detailTop);drawDetailColumn(right,84,119,detailTop)}else{drawDetailColumn(data.items,36,75,detailTop)}
   // 日付・定型文：内訳との距離を詰め、日付はやや右へ寄せる。
-  canvasFont(ctx,mm(3.5),500);ctx.textAlign='left';ctx.fillText(reiwaDateString(),mm(32),mm(74));ctx.fillText('上記正に領収いたしました',mm(70),mm(74));
+  canvasFont(ctx,mm(3.5),500);ctx.textAlign='left';ctx.fillText(reiwaDateString(),mm(32),mm(75));ctx.fillText('上記正に領収いたしました',mm(70),mm(75));
   // 印影は寺院名より先に描く（JPEGの白背景でも文字を前面へ）
   if(st.sealEnabled&&st.sealDataUrl){try{const im=await loadCanvasImage(st.sealDataUrl);if(im){const ss=clamp(Number(L.sealScale)||1,.35,2),sx=Number(L.sealX)||0,sy=Number(L.sealY)||0;const w=mm(18*ss),h=w;ctx.drawImage(im,mm(120+sx),mm(83+sy),w,h)}}catch(e){console.warn('印影読込失敗',e)}}
   // 発行者情報：山号＋寺院名を同じ下端（文字ベースライン）で揃え、その下に住所→電話番号。
