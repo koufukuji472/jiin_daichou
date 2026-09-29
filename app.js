@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.43';
+const APP_VERSION = '0.44';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -537,17 +537,18 @@ function canvasFont(ctx,sizePx,weight=500){ctx.font=`${weight} ${sizePx}px "Hira
 function spacedTextWidth(ctx,text,gapPx){const chars=[...String(text||'')];if(!chars.length)return 0;return chars.reduce((a,ch)=>a+ctx.measureText(ch).width,0)+Math.max(0,chars.length-1)*gapPx}
 function drawSpacedText(ctx,text,x,y,gapPx,align='left'){const chars=[...String(text||'')];if(!chars.length)return 0;const total=spacedTextWidth(ctx,text,gapPx);let cur=align==='center'?x-total/2:align==='right'?x-total:x;const old=ctx.textAlign;ctx.textAlign='left';for(const ch of chars){const w=ctx.measureText(ch).width;ctx.fillText(ch,cur,y);cur+=w+gapPx}ctx.textAlign=old;return total}
 function fitCanvasText(ctx,text,maxWidth,startPx,minPx=16,weight=500){let px=startPx;while(px>minPx){canvasFont(ctx,px,weight);if(ctx.measureText(String(text||'')).width<=maxWidth)return px;px-=2}return minPx}
+function fitCanvasSpacedText(ctx,text,maxWidth,startPx,minPx=16,weight=500,gapPx=0){let px=startPx;while(px>minPx){canvasFont(ctx,px,weight);if(spacedTextWidth(ctx,String(text||''),gapPx)<=maxWidth)return px;px-=2}return minPx}
 async function receiptCanvas(data,layoutOverride=null){
   const MM=8,W=Math.round(148*MM),H=Math.round(105*MM),c=document.createElement('canvas');c.width=W;c.height=H;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.fillStyle='#000';
   const st=ensureReceiptSettings(),L={...st.layout,...(layoutOverride||{})};const mm=v=>v*MM;
   // 見出し・番号
   canvasFont(ctx,mm(7.2),600);ctx.textAlign='center';ctx.fillText('領 収 書',mm(74),mm(13));
-  canvasFont(ctx,mm(4.4),500);ctx.textAlign='left';ctx.fillText(`No.  ${data.no}`,mm(111),mm(13));ctx.lineWidth=mm(.25);ctx.beginPath();ctx.moveTo(mm(108),mm(18));ctx.lineTo(mm(137),mm(18));ctx.stroke();
+  canvasFont(ctx,mm(4.4),500);ctx.textAlign='left';ctx.fillText(`No.  ${data.no}`,mm(111),mm(14.2));ctx.lineWidth=mm(.25);ctx.beginPath();ctx.moveTo(mm(108),mm(18));ctx.lineTo(mm(137),mm(18));ctx.stroke();
   // 宛名：旧標準の -5mm を新しい 0mm 基準にする。
   const ry=Number(L.recipientY)||0,rs=clamp(Number(L.recipientScale)||1,.65,1.5);ctx.textAlign='left';
   const recipientBase=-5+ry;
   if(data.name.line1){let px=fitCanvasText(ctx,data.name.line1,mm(64),mm(4.68)*rs,mm(3.1),500);canvasFont(ctx,px,500);ctx.fillText(data.name.line1,mm(14),mm(24+recipientBase))}
-  const second=[data.name.line2,data.name.honorific1].filter(Boolean).join(' ');if(second){let px=fitCanvasText(ctx,second,mm(63),mm(6.30)*rs,mm(3.4),600);canvasFont(ctx,px,600);ctx.fillText(second,mm(18),mm(32+recipientBase))}
+  const second=[data.name.line2,data.name.honorific1].filter(Boolean).join(' ');if(second){const recipientGap=mm(0.22)*rs;let px=fitCanvasSpacedText(ctx,second,mm(63),mm(6.30)*rs,mm(3.4),600,recipientGap);canvasFont(ctx,px,600);drawSpacedText(ctx,second,mm(18),mm(32+recipientBase),recipientGap,'left')}
   // 氏名と下線が重ならないよう約2mmの余白を確保。
   ctx.lineWidth=mm(.2);ctx.beginPath();ctx.moveTo(mm(13),mm(37+recipientBase));ctx.lineTo(mm(78),mm(37+recipientBase));ctx.stroke();
   // 金額枠：高さを圧縮して内訳領域を確保。
@@ -556,21 +557,21 @@ async function receiptCanvas(data,layoutOverride=null){
   const dy=Number(L.detailY)||0,ds=clamp(Number(L.detailScale)||1,.7,1.4);const detailTop=56+dy;canvasFont(ctx,mm(3.35)*ds,500);ctx.textAlign='left';ctx.fillText('内訳',mm(24),mm(detailTop));
   const drawDetailColumn=(items,labelX,amountX,startY)=>{let yy=startY;for(const item of items){canvasFont(ctx,mm(3.55)*ds,500);ctx.textAlign='left';ctx.fillText(item.label,mm(labelX),mm(yy));ctx.textAlign='right';ctx.fillText(`${fmt(item.amount)}円`,mm(amountX),mm(yy));yy+=4.3}};
   if(data.items.length===5){const left=data.items.filter(x=>!['問候','献香'].includes(x.label));const right=data.items.filter(x=>['問候','献香'].includes(x.label));drawDetailColumn(left,36,75,detailTop);drawDetailColumn(right,84,119,detailTop)}else{drawDetailColumn(data.items,36,75,detailTop)}
-  // 日付・定型文
-  canvasFont(ctx,mm(3.5),500);ctx.textAlign='left';ctx.fillText(reiwaDateString(),mm(24),mm(78));ctx.fillText('上記正に領収いたしました',mm(70),mm(78));
+  // 日付・定型文：内訳との距離を詰め、日付はやや右へ寄せる。
+  canvasFont(ctx,mm(3.5),500);ctx.textAlign='left';ctx.fillText(reiwaDateString(),mm(32),mm(74));ctx.fillText('上記正に領収いたしました',mm(70),mm(74));
   // 印影は寺院名より先に描く（JPEGの白背景でも文字を前面へ）
   if(st.sealEnabled&&st.sealDataUrl){try{const im=await loadCanvasImage(st.sealDataUrl);if(im){const ss=clamp(Number(L.sealScale)||1,.35,2),sx=Number(L.sealX)||0,sy=Number(L.sealY)||0;const w=mm(18*ss),h=w;ctx.drawImage(im,mm(120+sx),mm(83+sy),w,h)}}catch(e){console.warn('印影読込失敗',e)}}
   // 発行者情報：山号＋寺院名を同じ下端（文字ベースライン）で揃え、その下に住所→電話番号。
-  // ブロック全体は左揃えで、「上記正に領収いたしました」の「に」付近から開始する。
+  // 寺院名と住所の間隔も、住所と電話番号の間隔とほぼ同じになるよう詰める。
   const iy=Number(L.issuerY)||0,is=clamp(Number(L.issuerScale)||1,.7,1.4);const issuerX=84;
-  const baseY=88.5+iy;const mountainSize=mm(3.78)*is,templeSize=mm(7.20)*is,mountainGap=mm(1.15)*is,templeGap=mm(1.35)*is;
+  const baseY=84.2+iy;const addressY=89.2+iy,phoneY=94.2+iy;const mountainSize=mm(3.78)*is,templeSize=mm(7.20)*is,mountainGap=mm(1.15)*is,templeGap=mm(1.35)*is;
   let mountainW=0;if(st.mountain){canvasFont(ctx,mountainSize,500);mountainW=spacedTextWidth(ctx,st.mountain,mountainGap)}
   const between=st.mountain&&st.temple?mm(3.6)*is:0;let startX=mm(issuerX);
   const oldBaseline=ctx.textBaseline;ctx.textBaseline='alphabetic';
   if(st.mountain){canvasFont(ctx,mountainSize,500);ctx.textBaseline='alphabetic';drawSpacedText(ctx,st.mountain,startX,mm(baseY),mountainGap,'left');startX+=mountainW+between}
   if(st.temple){canvasFont(ctx,templeSize,600);ctx.textBaseline='alphabetic';drawSpacedText(ctx,st.temple,startX,mm(baseY),templeGap,'left')}
   ctx.textBaseline=oldBaseline;
-  canvasFont(ctx,mm(3.48)*is,500);ctx.textAlign='left';if(st.address)ctx.fillText(st.address,mm(issuerX),mm(95+iy));if(st.phone)ctx.fillText(`TEL：${st.phone}`,mm(issuerX),mm(100+iy));
+  canvasFont(ctx,mm(3.48)*is,500);ctx.textAlign='left';if(st.address)ctx.fillText(st.address,mm(issuerX),mm(addressY));if(st.phone)ctx.fillText(`TEL：${st.phone}`,mm(issuerX),mm(phoneY));
   return c;
 }
 async function receiptPreviewModal(){const list=selectedReceiptData();if(!list.length){toast('選択した範囲に領収書対象の金額がありません');return}let L={...ensureReceiptSettings().layout};const back=document.createElement('div');back.className='modal-backdrop';back.innerHTML=`<div class="modal" style="max-width:760px"><h3>領収書プレビュー</h3><div class="offering-preview-wrap" id="receiptPreviewWrap" style="max-height:55dvh"></div><div class="muted" style="margin:8px 0 12px">A6横 / ${esc(state.receiptIssueMode)} / 対象 ${list.length}件（プレビューは先頭の1件）</div><div class="grid3"><button class="btn" id="receiptPreviewCancel">戻る</button><button class="btn" id="receiptPreviewEdit">編集</button><button class="btn primary" id="receiptMakePdf">PDFを作成</button></div><div class="offering-editor hidden" id="receiptEditor"><div class="section-title">微調整</div>${receiptAdjustRow('宛名サイズ','recipientScale',.05,true)}${receiptAdjustRow('宛名上下','recipientY',1,false)}${receiptAdjustRow('金額サイズ','amountScale',.05,true)}${receiptAdjustRow('金額上下','amountY',1,false)}${receiptAdjustRow('内訳サイズ','detailScale',.05,true)}${receiptAdjustRow('内訳上下','detailY',1,false)}${receiptAdjustRow('発行者サイズ','issuerScale',.05,true)}${receiptAdjustRow('発行者上下','issuerY',1,false)}${receiptAdjustRow('印影サイズ','sealScale',.05,true)}${receiptAdjustRow('印影左右','sealX',1,false)}${receiptAdjustRow('印影上下','sealY',1,false)}</div></div>`;document.body.append(back);let canvas=null;const redraw=async()=>{canvas=await receiptCanvas(list[0],L);const w=$('#receiptPreviewWrap',back);w.innerHTML='';canvas.style.width='min(620px,92vw)';w.append(canvas);updateReceiptAdjustLabels(back,L)};await redraw();$('#receiptPreviewCancel',back).onclick=()=>back.remove();$('#receiptPreviewEdit',back).onclick=()=>$('#receiptEditor',back).classList.toggle('hidden');$$('[data-receipt-adj]',back).forEach(b=>b.onclick=async()=>{const k=b.dataset.receiptAdj,d=Number(b.dataset.delta);L[k]=Number(((L[k]??(k.endsWith('Scale')?1:0))+d).toFixed(2));await redraw()});$('#receiptMakePdf',back).onclick=async()=>{ensureReceiptSettings().layout={...L};autoSave();await makeReceiptPdf(list);back.remove()}}
