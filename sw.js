@@ -1,5 +1,5 @@
-const VERSION = '0.71';
-const CACHE = 'temple-reception-v071';
+const VERSION = '0.72';
+const CACHE = 'temple-reception-v072';
 const LOCAL = [
   './',
   './index.html',
