@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const APP_VERSION = '0.74';
+const APP_VERSION = '0.75';
 const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const INCOME = ['密葬香資','密葬供花','密葬供物','本葬香資','本葬供花料','本葬供物料','問候','献香'];
@@ -812,8 +812,9 @@ function drawGiftVertical(ctx,text,cx,topMm,bottomMm,fontMm,gapAdjustMm,MM){
   }
   const center=(topMm+bottomMm)/2;
   let y=center-total/2+actualFont/2;
+  // y / step はmm単位のまま保持し、描画時だけMM倍してCanvas pxへ変換する。
   postcardCanvasFont(ctx,actualFont*MM,500);ctx.textAlign='center';ctx.textBaseline='middle';
-  for(const ch0 of chars){ctx.fillText(verticalGlyph(ch0),cx*MM,y*MM);y+=step*MM}
+  for(const ch0 of chars){ctx.fillText(verticalGlyph(ch0),cx*MM,y*MM);y+=step}
 }
 function giftPageCanvas(items,settingsOverride=null){const MM=6,g={...ensureGiftSettings(),...(settingsOverride||{})},W=Math.round(297*MM),H=Math.round(210*MM),c=document.createElement('canvas');c.width=W;c.height=H;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);const left=g.marginLeft,right=297-g.marginRight,top=g.marginTop,bottom=210-g.marginBottom,usable=Math.max(10,right-left),stripW=usable/g.splitCount,foldY=top+g.glueMm;ctx.save();ctx.strokeStyle='rgba(120,120,120,.62)';ctx.lineWidth=Math.max(1,.18*MM);ctx.setLineDash([1.2*MM,1.2*MM]);ctx.strokeRect(left*MM,top*MM,(right-left)*MM,(bottom-top)*MM);for(let i=1;i<g.splitCount;i++){const x=(left+i*stripW)*MM;ctx.beginPath();ctx.moveTo(x,top*MM);ctx.lineTo(x,bottom*MM);ctx.stroke()}if(foldY<bottom){ctx.beginPath();ctx.moveTo(left*MM,foldY*MM);ctx.lineTo(right*MM,foldY*MM);ctx.stroke()}ctx.restore();const baseFontMm=6.2*1.6*2.4;const fontMm=baseFontMm*g.fontScale;const textTop=Math.min(bottom-5,foldY+4)+g.textY,textBottom=bottom-4+g.textY;for(let i=0;i<g.splitCount;i++){const item=items[i];if(!item)continue;const cx=left+(i+.5)*stripW+g.textX;drawGiftVertical(ctx,item.name,cx,textTop,textBottom,fontMm,g.gapAdjust,MM)}return c}
 function updateGiftAdjustLabels(root,L){const fs=$('#giftAdj_fontScale',root);if(fs)fs.textContent=`${Math.round((Number(L.fontScale)||1)*100)}%`;const gap=$('#giftAdj_gapAdjust',root);if(gap)gap.textContent=`${Number(L.gapAdjust)>0?'+':''}${Number(L.gapAdjust)||0}mm`;for(const k of ['textX','textY']){const e=$('#giftAdj_'+k,root);if(e){const v=Number(L[k])||0;e.textContent=`${v>0?'+':''}${v}mm`}}}
